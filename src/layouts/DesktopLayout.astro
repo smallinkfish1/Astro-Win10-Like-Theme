@@ -1,0 +1,110 @@
+---
+import "../styles/global.css";
+import { THEME_BOOTSTRAP } from "../lib/theme";
+
+interface Props {
+  title?: string;
+}
+const { title = "我的桌面" } = Astro.props;
+---
+
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="一个 Windows 10 风格的个人博客桌面" />
+    <title>{title}</title>
+
+    {/*
+      ⚠️⚠️ 这段脚本必须留在 <head> 里，而且必须是【内联同步】的。
+
+      它负责在页面绘制之前，把 .theme-dark / .no-acrylic / .no-anim
+      三个 class 打到 <html> 上。
+
+      如果把它挪到 React 组件里（比如 useEffect 里读 localStorage），
+      时序就变成了：
+          服务器返回 HTML（默认亮色）→ 浏览器绘制（用户看到亮色）
+          → JS 加载 → 注水 → effect 执行 → 变成暗色
+      中间那一帧亮色就是「闪白 / FOUC」，暗色模式用户每次刷新都会看到。
+
+      内联同步脚本没有这个延迟 —— 它在 <head> 解析时就执行完毕，
+      第一帧绘制出来就已经是正确主题。
+
+      具体逻辑在 src/lib/theme.ts 的 THEME_BOOTSTRAP 里，
+      和那几个 get*() 函数必须保持判断一致。
+    */}
+    <script is:inline set:html={THEME_BOOTSTRAP} />
+  </head>
+  <body class="relative h-screen w-screen overflow-hidden">
+    {/*
+      壁纸层：固定定位，永远压在最底下。
+
+      图片地址来自 CSS 变量 --wallpaper，暗色主题会在 global.css 里把它
+      覆盖成预先调暗的那张。这里不写死文件名，就是为了让"换壁纸"这件事
+      只在一个地方发生。
+
+      bg-fixed 不写：这个 div 本身已经是 position:fixed，再加 bg-fixed
+      在部分 Safari 上会触发重复合成的 bug，画面会闪。
+    */}
+    <div class="fixed inset-0 -z-10 bg-cover bg-center" style="background-image: var(--wallpaper)">
+    </div>
+
+    {/* 页面内容（桌面图标、窗口、任务栏等） */}
+    <slot />
+
+    {/*
+      ⚠️ 事件脚本必须放在这里（布局层），不能放进 DesktopIcon.astro。
+
+      原因：Astro 会把组件里的 script 渲染成一个真实的 DOM 节点。
+      如果它在 .desktop-grid 内部，CSS Grid 会把它当成一个格子占位 ——
+      即使 display:none 也照样占位 —— 后面的图标就会整体错位。
+
+      ⚠️ 另外，Astro 会把页面里所有 script 去重成一段执行，
+      所以下面必须用 querySelectorAll 全局查询，不能写"给当前组件绑事件"。
+    */}
+    <script>
+      let lastTap = 0;
+
+      function activate(el: HTMLElement) {
+        // Astro（静态壳）→ React（交互岛）之间用 CustomEvent 通信，
+        // 两边互不依赖，职责清晰。
+        window.dispatchEvent(
+          new CustomEvent("os:open-window", {
+            detail: {
+              id: el.dataset.iconId,
+              title: el.dataset.title,
+              icon: el.dataset.icon,
+              path: el.dataset.path,
+            },
+          })
+        );
+      }
+
+      document.querySelectorAll<HTMLElement>("[data-icon-id]").forEach((el) => {
+        // 双击打开：贴近 Win10 的真实手感
+        el.addEventListener("dblclick", () => activate(el));
+
+        // 键盘可达性：回车 / 空格也能打开
+        el.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            activate(el);
+          }
+        });
+
+        // 触屏设备没有 dblclick，退化成单击打开
+        el.addEventListener(
+          "touchend",
+          () => {
+            const now = Date.now();
+            if (now - lastTap < 350) return; // 防连点误触
+            lastTap = now;
+            activate(el);
+          },
+          { passive: true }
+        );
+      });
+    </script>
+  </body>
+</html>

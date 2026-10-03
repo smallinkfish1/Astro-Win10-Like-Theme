@@ -1,0 +1,226 @@
+---
+import "../styles/global.css";
+import { THEME_BOOTSTRAP } from "../lib/theme";
+
+/**
+ * 静态内容页的布局。
+ *
+ * ⚠️ 关键设计决定：这个布局**故意不复用 DesktopLayout**。
+ *
+ *   桌面布局（DesktopLayout）是给 index.astro 用的：overflow:hidden、
+ *   没有滚动条、内容是图标+窗口。那是给「人」看的。
+ *
+ *   这个布局是给「爬虫和直接访问者」看的：正常文档流、可滚动、
+ *   有页头页脚和导航。这是 SEO 那一半，必须是一个普通网页。
+ *
+ *   两者共用的是 global.css（尤其是 .md-body 排版），
+ *   而不是布局结构。共用样式、不共用骨架 —— 这样才对。
+ */
+
+interface Props {
+  title: string;
+  description?: string;
+  /** 规范链接，避免 /posts/x 和 /posts/x/ 被当成两个页面 */
+  canonical?: string;
+}
+
+const { title, description = "一个 Windows 10 风格的个人博客", canonical } = Astro.props;
+const site = "https://example.com";
+const currentPath = Astro.url.pathname;
+
+/** 顶部导航，所有静态页共用 */
+const NAV = [
+  { href: "/", label: "桌面" },
+  { href: "/posts", label: "全部文章" },
+  { href: "/archive", label: "归档" },
+  { href: "/tags", label: "标签" },
+  { href: "/about", label: "关于" },
+];
+---
+
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    {/* ── SEO 三件套 ── */}
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical ? `${site}${canonical}` : `${site}${currentPath}`} />
+
+    {/* ── 社交分享 ── */}
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={`${site}${currentPath}`} />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    {/* ── RSS 自动发现：浏览器和阅读器能自动找到订阅源 ── */}
+    <link
+      rel="alternate"
+      type="application/rss+xml"
+      title="RSS"
+      href={`${site}/rss.xml`}
+    />
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    {/*
+      ⚠️ 静态页同样需要主题启动脚本。
+      没有它的话，用户在暗色模式下从桌面点进文章，会看到一片亮白 ——
+      同一个站两个主题，体验是割裂的。
+      这段和 DesktopLayout 里的是同一份（来自 lib/theme.ts），
+      保证两边的判断逻辑永远不会分叉。
+    */}
+    <script is:inline set:html={THEME_BOOTSTRAP} />
+  </head>
+
+  <body class="min-h-screen bg-[var(--surface-3)] text-[var(--fg)]">
+    {/*
+      ⚠️ 这里必须放开滚动和选中。
+      global.css 里给 html/body 设了 overflow:hidden + user-select:none，
+      那是桌面布局需要的。静态页要正常滚动、正常选字，所以在这里覆盖回来。
+    */}
+    <style>
+      html,
+      body {
+        overflow: auto !important;
+        user-select: text !important;
+        height: auto !important;
+        background: var(--surface-3);
+        color: var(--fg);
+      }
+    </style>
+
+    {/* ── 页头 ── */}
+    <header
+      class="acrylic sticky top-0 z-10 border-b border-[var(--surface-border)]"
+    >
+      <div class="mx-auto flex h-14 max-w-3xl items-center gap-1 px-4">
+        <a
+          href="/"
+          class="mr-2 flex items-center gap-2 text-[14px] font-semibold text-[var(--fg)] no-underline"
+        >
+          <span
+            class="grid h-6 w-6 place-items-center rounded bg-[var(--accent)] text-[12px] text-white"
+          >
+            ⊞
+          </span>
+          我的桌面
+        </a>
+
+        <nav class="flex flex-1 items-center gap-0.5 overflow-x-auto">
+          {
+            NAV.slice(1).map((n) => (
+              <a
+                href={n.href}
+                class:list={[
+                  "shrink-0 rounded px-2.5 py-1.5 text-[13px] no-underline transition-colors",
+                  currentPath.startsWith(n.href)
+                    ? "bg-[var(--hover-strong)] font-medium text-[var(--accent)]"
+                    : "text-[var(--fg-dim)] hover:bg-[var(--hover)] hover:text-[var(--accent)]",
+                ]}
+              >
+                {n.label}
+              </a>
+            ))
+          }
+        </nav>
+
+        {/*
+          主题切换按钮。
+          ⚠️ 这里用的是 span 而不是 button —— 因为不想为它单独加载一段 JS。
+             （静态页要保持"零 JS 可用"，多一个 React 岛不划算。）
+
+             点击逻辑放在 body 末尾的一小段原生脚本里，
+             用事件委托挂在 document 上。这样即使以后这个按钮被挪位置、
+             或者页面里出现了第二个切换按钮，都不用改脚本。
+        */}
+        <button
+          type="button"
+          data-theme-toggle
+          aria-label="切换亮色/暗色主题"
+          title="切换亮色/暗色主题"
+          class="grid h-8 w-8 shrink-0 place-items-center rounded text-[15px]
+                 text-[var(--fg-dim)] transition-colors
+                 hover:bg-[var(--hover)] hover:text-[var(--fg)]"
+        >
+          {/*
+            ⚠️ 图标语义 = 「点击后会变成什么」，不是「当前是什么」。
+               暗色态显示 ☀️（点它切亮），亮色态显示 🌙（点它切暗）。
+               这和 Google / GitHub 等主流做法一致，符合用户直觉。
+
+               HTML 里先写 🌙（假设默认亮色），
+               页面底部脚本里的 sync() 会按实际主题把它纠正过来。
+               唯一的代价是暗色用户可能看到图标闪一下 ——
+               但它只是个 emoji，在页头角落里，比闪白整页轻微得多。
+          */}
+          <span data-theme-icon>🌙</span>
+        </button>
+      </div>
+    </header>
+
+    {/* ── 主内容 ── */}
+    <main class="mx-auto max-w-3xl px-4 py-8">
+      <slot />
+    </main>
+
+    {/* ── 页脚 ── */}
+    <footer
+      class="mt-8 border-t border-[var(--surface-border)] py-8 text-center text-[12px] text-[var(--fg-faint)]"
+    >
+      <p>
+        <a href="/" class="text-[var(--fg-dim)] no-underline hover:text-[var(--accent)]">桌面</a>
+        <span class="mx-2">·</span>
+        <a href="/posts" class="text-[var(--fg-dim)] no-underline hover:text-[var(--accent)]">文章</a>
+        <span class="mx-2">·</span>
+        <a href="/rss.xml" class="text-[var(--fg-dim)] no-underline hover:text-[var(--accent)]">RSS</a>
+      </p>
+      <p class="mt-2 opacity-70">
+        本站桌面视图需要 JavaScript；所有内容均可无 JS 访问。
+      </p>
+    </footer>
+
+    {/*
+      静态页的主题切换。
+      三段职责，都是最小的：
+        1. 同步按钮图标（因为页面不重新加载，图标不会自己更新）
+        2. 点击切换，写 localStorage
+        3. 清除上面 .acrylic 在无 JS 时的"永久模糊"（可选优化，这里省略）
+
+      ⚠️ 为什么不用 lib/theme.ts 里的 setTheme？
+         因为那是给 React 岛用的模块，静态页要做成"零依赖"。
+         这里只重复了 3 行最核心的逻辑。
+         两者唯一的约定是 localStorage 的键名必须一致 ——
+         键名集中在 lib/theme.ts 里定义，这里写死但加了注释提醒。
+    */}
+    <script is:inline>
+      (function () {
+        var KEY = "win10-blog:theme";
+        var icon = document.querySelector("[data-theme-icon]");
+
+        function sync() {
+          var dark = document.documentElement.classList.contains("theme-dark");
+          if (icon) icon.textContent = dark ? "☀️" : "🌙";
+        }
+        sync();
+
+        document.addEventListener("click", function (e) {
+          var btn = e.target.closest("[data-theme-toggle]");
+          if (!btn) return;
+          var next = document.documentElement.classList.contains("theme-dark")
+            ? "light"
+            : "dark";
+          document.documentElement.classList.toggle("theme-dark", next === "dark");
+          try {
+            localStorage.setItem(KEY, next);
+          } catch (err) {
+            /* 隐私模式下会抛错，忽略 */
+          }
+          sync();
+        });
+      })();
+    </script>
+  </body>
+</html>

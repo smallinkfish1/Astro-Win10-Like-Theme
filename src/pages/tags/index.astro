@@ -1,0 +1,74 @@
+---
+import ContentLayout from "../../layouts/ContentLayout.astro";
+import { getTags, getCategories, getPosts } from "../../lib/posts";
+
+const tags = await getTags();
+const categories = await getCategories();
+const total = (await getPosts(false)).length;
+
+/** 标签云的相对字号：文章数越多字越大 —— 这是标签云唯一真正有用的信息 */
+const maxCount = Math.max(1, ...tags.map((t) => t.count));
+const sizeOf = (n: number) => 13 + Math.round(((n - 1) / Math.max(1, maxCount - 1)) * 11);
+---
+
+<ContentLayout
+  title="标签"
+  description={`共 ${tags.length} 个标签、${categories.length} 个分类，覆盖 ${total} 篇文章。`}
+  canonical="/tags"
+>
+  <div class="mb-8">
+    <h1 class="m-0 text-[24px] font-semibold text-[var(--fg)]">标签</h1>
+    <p class="mt-2 text-[13px] text-[var(--fg-dim)]">
+      {tags.length} 个标签 · {categories.length} 个分类 · {total} 篇文章
+    </p>
+  </div>
+
+  {/* ── 标签云 ── */}
+  <section class="mb-10">
+    <h2 class="mb-4 border-b border-[var(--surface-border)] pb-2 text-[16px] font-semibold text-[var(--fg)]">
+      标签云
+    </h2>
+    <div class="flex flex-wrap items-baseline gap-x-4 gap-y-2.5">
+      {
+        tags.map((t) => (
+          <a
+            href={`/tags/${encodeURIComponent(t.name)}`}
+            class="text-[var(--fg-dim)] no-underline leading-none transition-colors hover:text-[var(--accent)]"
+            style={`font-size:${sizeOf(t.count)}px`}
+            title={`${t.count} 篇文章`}
+          >
+            #{t.name}
+            <sub class="ml-0.5 text-[10px] text-[var(--fg-faint)]">{t.count}</sub>
+          </a>
+        ))
+      }
+    </div>
+  </section>
+
+  {/* ── 分类 ── */}
+  <section>
+    <h2 class="mb-4 border-b border-[var(--surface-border)] pb-2 text-[16px] font-semibold text-[var(--fg)]">
+      分类
+    </h2>
+    <div class="grid gap-2.5 sm:grid-cols-2">
+      {
+        categories.map((c) => (
+          <a
+            href={`/category/${encodeURIComponent(c.name)}`}
+            class="flex items-center gap-3 rounded border border-[var(--surface-border)] bg-[var(--surface)] px-4 py-3 no-underline transition-colors hover:border-[var(--accent)] hover:bg-[var(--surface-2)]"
+          >
+            <span class="text-[16px]">📂</span>
+            <span class="flex-1 text-[13.5px] font-medium text-[var(--fg)]">{c.name}</span>
+            <span class="text-[12px] text-[var(--fg-faint)]">{c.count} 篇</span>
+          </a>
+        ))
+      }
+    </div>
+  </section>
+
+  {
+    tags.length === 0 && (
+      <p class="py-16 text-center text-[13px] text-[var(--fg-faint)]">还没有标签。</p>
+    )
+  }
+</ContentLayout>

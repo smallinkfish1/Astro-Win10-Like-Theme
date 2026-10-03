@@ -1,0 +1,66 @@
+---
+import { isImageIcon } from "../../lib/tiles";
+
+interface Props {
+  id: string;
+  label: string;
+  icon: string;
+  path: string;
+}
+const { id, label, icon, path } = Astro.props;
+
+/**
+ * 一个图标要么是 emoji（"🖥️"），要么是图片地址（"/icons/pc.png"）。
+ *
+ * 判断规则统一放在 lib/tiles.ts 的 isImageIcon 里，磁贴那边用同一套，
+ * 免得两处规则跑偏（比如这边只认 / 开头、那边只认 http 开头）。
+ */
+const useImage = isImageIcon(icon);
+---
+
+<div
+  class="os-icon group flex w-20 cursor-default flex-col items-center gap-1.5 rounded p-2
+         transition-colors hover:bg-white/15 active:bg-white/25
+         focus:bg-white/25 focus:outline-none"
+  tabindex="0"
+  role="button"
+  aria-label={label}
+  data-icon-id={id}
+  data-title={label}
+  data-icon={icon}
+  data-path={path}
+>
+  <div class="grid h-11 w-11 place-items-center">
+    {
+      useImage ? (
+        <img
+          src={icon}
+          alt=""
+          width="44"
+          height="44"
+          draggable="false"
+          class="h-11 w-11 object-contain drop-shadow-[0_2px_4px_rgba(0,0,0,.5)]"
+        />
+      ) : (
+        <span class="text-[30px] leading-none drop-shadow-[0_2px_4px_rgba(0,0,0,.5)]">{icon}</span>
+      )
+    }
+  </div>
+  <span
+    class="text-center text-[12px] leading-tight text-white
+           [text-shadow:0_1px_3px_rgba(0,0,0,.95)]"
+  >
+    {label}
+  </span>
+</div>
+
+{/*
+  ⚠️ 注意这里【没有】<script>。
+  这个组件会被渲染很多次，如果每个实例都带 <script>，Astro 会把它们
+  去重后在网格容器里留下一个真实 DOM 节点，而 CSS Grid 会把它算作一个格子，
+  导致整排图标错位。所以事件监听统一放在 DesktopLayout.astro。
+
+  ⚠️ 图片图标加了 draggable="false"。
+  浏览器默认允许拖拽 <img>，拖起来是一张半透明的图片幽灵，
+  在桌面上看起来就像"误触发了拖拽"。桌面图标本身不是可拖拽对象，直接关掉。
+*/}

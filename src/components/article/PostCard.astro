@@ -1,0 +1,32 @@
+---
+import { formatDate, readingTime, type ClientPost } from "../../lib/markdown";
+
+interface Props {
+  post: ClientPost;
+}
+
+const { post } = Astro.props;
+const href = `/posts/${post.slug}`;
+const accent = post.accent ?? "#2b579a";
+---
+
+{/*
+  静态文章卡片。
+  ⚠️ 这里用的是普通 <a>，不是"点一下开窗口"。
+     因为这是 SEO 路径 —— 爬虫和禁用 JS 的用户要能把链接跟下去。
+     窗口化的那套只在桌面首页（index.astro）里生效。
+*/}
+<a href={href} class="post-card" style={`border-left-color:${accent}`}>
+  <h3 class="post-card-title">{post.title}</h3>
+  <p class="post-card-desc">{post.description || "（暂无摘要）"}</p>
+  <div class="post-card-foot">
+    <span>{formatDate(post.pubDate)}</span>
+    <span>·</span>
+    <span>{readingTime(post.body)}</span>
+    <span>·</span>
+    <span class="text-[#41566f]">{post.category}</span>
+    {post.tags.slice(0, 3).map((t) => (
+      <span class="md-chip">#{t}</span>
+    ))}
+  </div>
+</a>

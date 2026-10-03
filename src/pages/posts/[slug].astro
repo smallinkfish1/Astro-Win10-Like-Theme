@@ -1,0 +1,147 @@
+---
+import ContentLayout from "../../layouts/ContentLayout.astro";
+import PostCard from "../../components/article/PostCard.astro";
+import { getPosts, renderPost } from "../../lib/posts";
+import { toClientPost, formatDate, readingTime } from "../../lib/markdown";
+
+/**
+ * 单篇文章的静态页 —— 整个 SEO 需求的核心。
+ *
+ * ⚠️ 这个文件必须存在，而且必须是静态预渲染的。
+ *    如果你把它改成"用户访问 /posts/xxx 时由 JS 渲染"，
+ *    爬虫看到的就是一个空壳，全站 SEO 直接归零。
+ *
+ * getStaticPaths 在构建期跑一次，为每一篇文章产出一个独立 HTML：
+ *   dist/posts/why-win10/index.html
+ *   dist/posts/astro-islands/index.html
+ *   ...
+ * 每份 HTML 里都有【完整的正文】，不依赖任何 JavaScript。
+ */
+export async function getStaticPaths() {
+  // 包含草稿：草稿也该有静态页（方便自己分享预览链接），
+  // 只是它不会出现在列表/归档/标签页/搜索索引里
+  const posts = await getPosts(true);
+  return posts.map((post) => ({
+    params: { slug: post.slug },
+    props: { post },
+  }));
+}
+
+const { post } = Astro.props;
+
+/**
+ * 正文：Astro 在构建期渲染 Markdown。
+ *
+ * ⚠️ Astro 7 的 API 是 render(entry)，不是 entry.render()。
+ *    entry.render() 是旧写法，在新版本里会报 "post.render is not a function"。
+ *    这也是为什么 getPosts() 必须把原始 entry 一路带过来 —— render() 要的就是它。
+ */
+const { Content } = await renderPost(post);
+
+/** 上一/下一篇：给读者一条继续往下走的路，也让爬虫多一条内链 */
+const all = await getPosts(false);
+const idx = all.findIndex((p) => p.slug === post.slug);
+const prev = idx > 0 ? all[idx - 1] : null;
+const next = idx >= 0 && idx < all.length - 1 ? all[idx + 1] : null;
+
+const related = all
+  .filter((p) => p.slug !== post.slug && p.tags.some((t) => post.tags.includes(t)))
+  .slice(0, 3);
+---
+
+<ContentLayout title={post.title} description={post.description} canonical={`/posts/${post.slug}`}>
+  <article>
+    {/*
+      ── 结构化数据 ──
+      给搜索引擎的 Article schema，让搜索结果能显示作者、日期、标题。
+      这一段必须和可见正文一致，否则会被判为作弊。
+    */}
+    <script
+      type="application/ld+json"
+      set:html={JSON.stringify({
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        headline: post.title,
+        description: post.description,
+        datePublished: post.pubDate,
+        dateModified: post.updatedDate ?? post.pubDate,
+        keywords: post.tags.join(", "),
+        articleSection: post.category,
+      })}
+    />
+
+    {/* ── 文章头 ── */}
+    <header>
+      <h1 class="m-0 text-[27px] font-semibold leading-snug text-[var(--fg)]">{post.title}</h1>
+
+      <div class="md-meta">
+        <span>📅 {formatDate(post.pubDate)}</span>
+        <span>·</span>
+        <span>⏱ {readingTime(post.body)}</span>
+        <span>·</span>
+        <a class="md-chip" href={`/category/${encodeURIComponent(post.category)}`}>
+          📂 {post.category}
+        </a>
+        {post.tags.map((t) => (
+          <a class="md-chip" href={`/tags/${encodeURIComponent(t)}`}>#{t}</a>
+        ))}
+      </div>
+    </header>
+
+    {/*
+      ── 正文 ──
+      注意 class="md-body" —— 和窗口内渲染用的是同一个类。
+      两套渲染路径共用一套排版规则，改一处两边同步。
+    */}
+    <div class="md-body">
+      <Content />
+    </div>
+  </article>
+
+  {/* ── 上下篇 ── */}
+  <nav class="mt-10 grid gap-3 border-t border-[var(--surface-border)] pt-6 sm:grid-cols-2">
+    {
+      prev && (
+        <a href={`/posts/${prev.slug}`} class="post-card" style="border-left-color:#98a1ae">
+          <div class="text-[11px] text-[var(--fg-faint)]">← 上一篇</div>
+          <div class="mt-1 text-[13.5px] font-medium text-[var(--fg)]">{prev.title}</div>
+        </a>
+      )
+    }
+    {
+      next && (
+        <a
+          href={`/posts/${next.slug}`}
+          class="post-card sm:text-right"
+          style="border-left-color:#98a1ae"
+        >
+          <div class="text-[11px] text-[var(--fg-faint)]">下一篇 →</div>
+          <div class="mt-1 text-[13.5px] font-medium text-[var(--fg)]">{next.title}</div>
+        </a>
+      )
+    }
+  </nav>
+
+  {/* ── 相关文章 ── */}
+  {
+    related.length > 0 && (
+      <section class="mt-10">
+        <h2 class="mb-3 text-[15px] font-semibold text-[var(--fg)]">
+          相关文章
+          <span class="ml-2 text-[12px] font-normal text-[var(--fg-faint)]">按标签匹配</span>
+        </h2>
+        <div class="flex flex-col gap-3">
+          {related.map((p) => (
+            <PostCard post={toClientPost(p)} />
+          ))}
+        </div>
+      </section>
+    )
+  }
+
+  <p class="mt-10 text-[12.5px] text-[var(--fg-faint)]">
+    <a href="/posts" class="text-[var(--accent)] no-underline hover:underline">← 返回文章列表</a>
+    <span class="mx-2">·</span>
+    <a href="/" class="text-[var(--accent)] no-underline hover:underline">回到桌面</a>
+  </p>
+</ContentLayout>

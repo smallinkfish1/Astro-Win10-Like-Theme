@@ -1,0 +1,78 @@
+---
+import ContentLayout from "../layouts/ContentLayout.astro";
+import { getArchive, getPosts } from "../lib/posts";
+import { formatDate } from "../lib/markdown";
+
+const years = await getArchive();
+const all = await getPosts(false);
+const total = all.length;
+---
+
+<ContentLayout
+  title="归档"
+  description={`按时间浏览全部 ${total} 篇文章。`}
+  canonical="/archive"
+>
+  <div class="mb-6">
+    <h1 class="m-0 text-[24px] font-semibold text-[var(--fg)]">归档</h1>
+    <p class="mt-2 text-[13px] text-[var(--fg-dim)]">
+      按时间倒序 · 共 {total} 篇 · {years.length} 个年份
+    </p>
+  </div>
+
+  <div class="flex flex-col gap-8">
+    {
+      years.map(({ year, months }) => (
+        <section>
+          <h2 class="mb-3 flex items-baseline gap-3 border-b border-[var(--surface-border)] pb-2 text-[17px] font-semibold text-[var(--fg)]">
+            {year} 年
+            <span class="text-[12px] font-normal text-[var(--fg-faint)]">
+              {months.reduce((n, m) => n + m.posts.length, 0)} 篇
+            </span>
+          </h2>
+
+          <div class="flex flex-col gap-5">
+            {months.map(({ month, posts }) => (
+              <div>
+                <h3 class="mb-2 text-[13px] font-medium text-[var(--fg-dim)]">
+                  {month} 月
+                  <span class="ml-2 text-[11.5px] font-normal text-[var(--fg-faint)]">
+                    {posts.length} 篇
+                  </span>
+                </h3>
+                <ul class="m-0 flex list-none flex-col gap-1 p-0">
+                  {posts.map((p) => (
+                    <li class="flex items-baseline gap-3">
+                      <span class="shrink-0 text-[11.5px] tabular-nums text-[var(--fg-faint)]">
+                        {formatDate(p.pubDate).slice(5)}
+                      </span>
+                      <a
+                        href={`/posts/${p.slug}`}
+                        class="min-w-0 flex-1 truncate text-[13.5px] text-[var(--fg)] no-underline hover:text-[var(--accent)] hover:underline"
+                      >
+                        {p.title}
+                      </a>
+                      <span class="hidden shrink-0 text-[11.5px] text-[var(--fg-faint)] sm:inline">
+                        {p.category}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </section>
+      ))
+    }
+  </div>
+
+  {
+    total === 0 && (
+      <p class="py-16 text-center text-[13px] text-[var(--fg-faint)]">还没有文章。</p>
+    )
+  }
+
+  <p class="mt-10 border-t border-[var(--surface-border)] pt-5 text-[12.5px] text-[var(--fg-faint)]">
+    <a href="/posts" class="text-[var(--accent)] no-underline hover:underline">← 返回文章列表</a>
+  </p>
+</ContentLayout>

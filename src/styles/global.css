@@ -1,0 +1,804 @@
+@import "tailwindcss";
+
+/* ============================================================
+   Win10 主题设计令牌（Design Tokens）
+   ============================================================
+
+   整个 UI 的颜色、材质、动画，全部从这里取值。
+
+   规则只有一条：**组件里不许写死颜色**，一律 var(--xxx)。
+   这样暗色模式只要覆盖一遍变量就行，不用去改任何一个组件。
+
+   ── 关于 <html> 上的三个开关类 ──
+     .theme-dark     暗色模式
+     .no-acrylic     关闭毛玻璃（低端设备 / 用户偏好）
+     .no-anim        关闭动画（晕动症友好 / 用户偏好）
+   这些都是加在 <html> 上的，由 src/lib/theme.ts 负责读写 localStorage。
+
+   ============================================================ */
+
+:root {
+  /* ── 几何 ── */
+  --taskbar-h: 40px;
+
+  /* ── 品牌色 ── */
+  --accent: #2b579a;
+  --accent-hover: #3a6cb5;
+
+  /*
+    标题栏渐变。
+    亮色下是 Win10 的经典深蓝（#2b579a）。
+    暗色下必须换成更亮更淡的蓝 —— 否则深蓝配暗色底会糊成一片看不出边界。
+  */
+  --titlebar-gradient: linear-gradient(180deg, #2b579a 0%, #1e4478 100%);
+
+  /* ============================================================
+     毛玻璃材质（Acrylic）
+
+     Win10 的 Acrylic 是「半透明底色 + 背景模糊 + 噪点纹理」三层叠加。
+     这里省掉噪点（用 CSS 画噪点成本高、收益低），保留前两层。
+
+     ── 那两组 rgba 是怎么定出来的？ ──
+
+     Win10 任务栏和开始菜单用的都是【深色 Acrylic】，
+     在 4K 屏幕上叠加白色内容后，实测色值大约落在：
+
+       亮色主题任务栏： rgb(243,243,243) 不透明度约 0.80
+       暗色主题任务栏： rgb(31,31,31)   不透明度约 0.80
+
+     但纯灰会显得「脏」，Win10 实际带一点点冷色调（偏蓝）。
+     所以把 R/G/B 拉开一点：
+
+       亮色 rgba(243,243,243,.80) → 微调成 rgba(240,242,246,.78)  偏冷灰
+       暗色 rgba(31,31,31,.80)    → 微调成 rgba(28,30,34,.78)     偏冷灰
+
+     为什么是 .78 而不是 .80？
+     因为下面还叠了一层 backdrop-filter 的亮度/饱和度增强
+     （见 .acrylic 类），实际观感会比裸色值稍亮，
+     把底色压到 .78 刚好抵消这个增益，最终视觉落在 .80 附近。
+
+     ⚠️ 如果你要自己调，建议保持「R≈G≈B 但略偏蓝」：
+        冷灰的公式就是 B 比 R 高 3~6，别用纯灰 (r=g=b)。
+     ============================================================ */
+  --acrylic-bg: rgba(240, 242, 246, 0.78);
+  --acrylic-bg-strong: rgba(240, 242, 246, 0.92); /* 需要更实的地方，如对话框 */
+  --acrylic-border: rgba(255, 255, 255, 0.55);
+  --acrylic-shadow: 0 8px 28px rgba(15, 30, 55, 0.22);
+
+  /* 模糊半径。Win10 官方 Acrylic 用 30px，但那是整屏采样；
+     网页里 15~20px 已经足够，再高会明显掉帧。 */
+  --acrylic-blur: 15px;
+
+  /* ============================================================
+     前景色（文字 / 图标）
+     ============================================================ */
+  --fg: #1a1a1a;
+  --fg-dim: #5a6472;
+  --fg-faint: #8a94a3;
+  --fg-on-acrylic: #1a1a1a; /* 任务栏/开始菜单上的文字 */
+
+  /* ============================================================
+     表面色（Surface）
+     窗口、卡片这类「实心」区域
+     ============================================================ */
+  --surface: #ffffff;
+  --surface-2: #f7f9fb; /* 次级背景，如列表 hover */
+  --surface-3: #eceff2; /* 更深的次级背景 */
+  --surface-border: #d8dee6;
+
+  /* ============================================================
+     交互态。Win10 的按钮 hover 是「叠一层半透明白/黑」，
+     而不是换一个实色 —— 这样在任何底色上都能work。
+     ============================================================ */
+  --hover: rgba(0, 0, 0, 0.06);
+  --hover-strong: rgba(0, 0, 0, 0.1);
+  --active: rgba(0, 0, 0, 0.14);
+  --hover-invert: rgba(255, 255, 255, 0.15); /* 深色材质上的 hover */
+
+  /* ── 滚动条 ── */
+  --scrollbar-thumb: #c4c4c4;
+  --scrollbar-thumb-hover: #9a9a9a;
+  --scrollbar-track: transparent;
+
+  /* ============================================================
+     动画时长与缓动
+     Win10 的默认曲线是 cubic-bezier(0.1, 0.9, 0.2, 1)
+     —— 起步快、收尾缓，这就是 Windows 那种"干脆"的手感来源。
+     ============================================================ */
+  --ease-win: cubic-bezier(0.1, 0.9, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur: 180ms;
+  --dur-slow: 280ms;
+
+  /* ============================================================
+     壁纸
+     ============================================================
+     用变量而不是在布局里写死 url()，是为了和主题体系保持一致：
+     暗色模式只需要覆盖 --wallpaper 指向另一张预先调暗的图。
+
+     ⚠️ 为什么不用 filter: brightness() 把亮壁纸压暗？
+        因为 filter 会把壁纸上的所有细节（渐变层次、光晕）一起压平，
+        最后看起来是一块发闷的深蓝。预先处理过的暗版保留了层次感。
+
+     ⚠️ 为什么不做"亮/暗两张同时挂、靠 class 切显隐"？
+        那样两张 4K 图都会被浏览器加载，白白多花 ~150KB。
+        变量切换时浏览器只会请求当前用到的那张。
+     ============================================================ */
+  --wallpaper: url("/wallpaper.jpg");
+}
+
+/* ============================================================
+   暗色主题
+   ============================================================
+   只覆盖变量，不碰任何组件。
+   ============================================================ */
+.theme-dark {
+  /* 壁纸换成预先调暗的版本（brightness 0.42 + 降低饱和度） */
+  --wallpaper: url("/wallpaper-dark.jpg");
+
+  /* 暗色 Acrylic：偏冷灰，不是纯黑 —— 纯黑会显得廉价 */
+  --acrylic-bg: rgba(28, 30, 34, 0.78);
+  --acrylic-bg-strong: rgba(28, 30, 34, 0.94);
+  --acrylic-border: rgba(255, 255, 255, 0.09);
+  --acrylic-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+
+  --fg: #e8eaed;
+  --fg-dim: #a8b0bb;
+  --fg-faint: #7a848f;
+  --fg-on-acrylic: #ffffff;
+
+  --surface: #1f1f1f;
+  --surface-2: #262626;
+  --surface-3: #2e2e2e;
+  --surface-border: #3a3a3a;
+
+  /* 暗色下 hover 要改用白色叠加，否则黑叠黑看不出变化 */
+  --hover: rgba(255, 255, 255, 0.07);
+  --hover-strong: rgba(255, 255, 255, 0.11);
+  --active: rgba(255, 255, 255, 0.16);
+  --hover-invert: rgba(255, 255, 255, 0.15);
+
+  --scrollbar-thumb: #4a4a4a;
+  --scrollbar-thumb-hover: #5e5e5e;
+
+  --accent: #4a86c8;
+  --accent-hover: #5a96d8;
+
+  /* 暗色下标题栏用更亮的蓝，保证和暗背景有足够对比，边界看得清 */
+  --titlebar-gradient: linear-gradient(180deg, #3a6ea5 0%, #2c5480 100%);
+}
+
+/* ============================================================
+   材质工具类
+   ============================================================ */
+
+/**
+ * .acrylic —— Win10 Acrylic 材质
+ *
+ * backdrop-filter 的取值不是只有 blur：
+ *   blur(15px)         背景模糊，这是"毛玻璃"的本体
+ *   saturate(180%)     提高背景色彩饱和度，让模糊后的色块更"活"
+ *   brightness(...)    暗色主题下压暗一点，避免浅色壁纸把面板冲白
+ *
+ * 这三个一起用才是 Acrylic。只写 blur 会显得"糊而灰"。
+ *
+ * ⚠️⚠️ 为什么两个属性都写，而且【标准属性写在后面】？
+ *
+ *    构建时 Tailwind v4 内置的 lightningcss 会做浏览器前缀处理。
+ *    如果先写 -webkit- 再写标准属性，它认为"标准属性已经覆盖了前缀版本"，
+ *    于是把标准属性删掉，只留下 -webkit-backdrop-filter。
+ *
+ *    结果就是产物里只有前缀版本，而 getComputedStyle 读的标准属性是 none ——
+ *    调试时完全看不出问题在哪（视觉上因为 Chrome 仍认 -webkit- 而正常）。
+ *
+ *    这个"隐式依赖前缀"很脆弱：一旦某天浏览器收紧前缀支持，
+ *    毛玻璃会毫无征兆地消失。所以这里显式保留标准属性。
+ *
+ *    另一个必须知道的细节：backdrop-filter 需要「透出背后内容」才能生效。
+ *    如果元素的祖先链条上有 opacity < 1、filter、或 transform 造成的
+ *    独立层叠上下文，模糊会失效或表现异常。任务栏是 position:fixed
+ *    直接挂在 body 下，没有这个问题。
+ */
+.acrylic {
+  background: var(--acrylic-bg);
+  -webkit-backdrop-filter: blur(var(--acrylic-blur)) saturate(180%);
+  backdrop-filter: blur(var(--acrylic-blur)) saturate(180%);
+}
+
+.theme-dark .acrylic {
+  -webkit-backdrop-filter: blur(var(--acrylic-blur)) saturate(180%) brightness(0.9);
+  backdrop-filter: blur(var(--acrylic-blur)) saturate(180%) brightness(0.9);
+}
+
+/**
+ * 关闭毛玻璃时的降级。
+ *
+ * ⚠️ 必须是【实色】而不是把 backdrop-filter 设成 none：
+ *    因为面板底色本身是半透明的，去掉模糊后，
+ *    桌面壁纸会从面板背后透出来，文字直接看不清。
+ *    所以这里换成一个接近不透明的实色。
+ *
+ * ⚠️⚠️ 两个必须注意的地方（这里踩过坑）：
+ *
+ *    1. 标准属性和 -webkit- 前缀都要写成 none，缺一个都可能不生效。
+ *       （前面批量替换时把标准属性那行弄丢了，导致关掉毛玻璃后
+ *         blur 依然存在 —— 因为 -webkit-backdrop-filter 被设成 none 了，
+ *         但浏览器实际认的是标准属性 backdrop-filter。）
+ *
+ *    2. 选择器必须写到 3 个类（.no-acrylic.theme-dark .acrylic）：
+ *       因为 .theme-dark .acrylic 是 2 个类，
+ *       如果这里也只写 2 个类，两边优先级相同，
+ *       后出现的 .theme-dark 规则会赢 —— 暗色模式下关不掉毛玻璃。
+ *       这里虽然已经有 !important 兜底，但选择器本身也不该留隐患：
+ *       一旦哪天有人为了别的目的去掉了 !important，问题会立刻复发。
+ */
+.no-acrylic .acrylic,
+.no-acrylic.theme-dark .acrylic {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  background: var(--acrylic-bg-strong) !important;
+}
+
+/* ============================================================
+   动画：统一开关
+   ============================================================
+   ⚠️ 这里用「把所有时长压成 0」而不是 animation: none。
+      因为有些动画依赖 animationend / transitionend 事件
+      （比如窗口关闭后要卸载 DOM）。直接禁掉动画，
+      那些回调就永远不触发，窗口会关不掉。
+      把时长设成 0.01ms 既做到视觉上"没有动画"，
+      又保证事件照常触发。
+   ============================================================ */
+.no-anim *,
+.no-anim *::before,
+.no-anim *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* 系统级「减少动态效果」偏好也要尊重 —— 这是无障碍要求，不是可选项 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ============================================================
+   关键帧动画
+   ============================================================ */
+
+/* 窗口打开：从 92% 放到 100%，同时淡入 —— Win10 的窗口就是这个手感 */
+@keyframes win-open {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* 窗口关闭：反向，稍微更快一点（关闭比打开要"利落"） */
+@keyframes win-close {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+}
+
+/* 开始菜单：从下往上滑入 + 淡入。32px 是实测比较接近 Win10 的距离 */
+@keyframes menu-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(32px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 开始菜单关闭：往回缩 */
+@keyframes menu-slide-down {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(32px);
+  }
+}
+
+/* 磁贴入场：轻微上浮 + 淡入，逐个错开（靠 --i 变量传索引） */
+@keyframes tile-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ============================================================
+   动画工具类
+   ============================================================ */
+
+.anim-win-open {
+  animation: win-open var(--dur-slow) var(--ease-win) both;
+}
+
+.anim-win-close {
+  animation: win-close var(--dur) var(--ease-win) both;
+}
+
+.anim-menu {
+  /* transform-origin 放在左下角：开始菜单是从开始按钮那个位置"长出来"的 */
+  transform-origin: bottom left;
+  animation: menu-slide-up var(--dur-slow) var(--ease-win) both;
+}
+
+.anim-menu-closing {
+  transform-origin: bottom left;
+  animation: menu-slide-down var(--dur) var(--ease-win) both;
+}
+
+/**
+ * 磁贴入场错峰。
+ * --i 由组件内联传入（0,1,2…），延迟 = i × 22ms。
+ * 上限用 min() 压住，避免第 20 个磁贴要等半秒才出现。
+ */
+.anim-tile {
+  animation: tile-in var(--dur) var(--ease-win) both;
+  animation-delay: min(calc(var(--i, 0) * 22ms), 260ms);
+}
+
+/* ============================================================
+   基础
+   ============================================================ */
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden; /* 桌面不能出现滚动条 */
+  font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  user-select: none; /* 桌面图标不该被拖蓝选中 */
+  color: var(--fg);
+}
+
+/* 主题切换时给整个页面一个平滑过渡。
+   只过渡颜色，不过渡 transform/layout —— 那会导致重建布局，很卡。 */
+html.theme-transition,
+html.theme-transition * {
+  transition:
+    background-color var(--dur) var(--ease-win),
+    border-color var(--dur) var(--ease-win),
+    color var(--dur) var(--ease-win) !important;
+}
+
+/* 窗口内容区允许选中文字 —— 上面禁掉的是桌面，不是正文 */
+.win-body {
+  user-select: text;
+}
+
+/* 滚动条换成细的，贴近 Win10 观感 */
+.win-body::-webkit-scrollbar {
+  width: 10px;
+}
+.win-body::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border: 2px solid var(--surface);
+  background-clip: padding-box;
+}
+.win-body::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+  background-clip: padding-box;
+  border: 2px solid var(--surface);
+}
+.win-body::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+.win-body::-webkit-scrollbar-corner {
+  background: var(--scrollbar-track);
+}
+
+/* react-rnd 的缩放手柄默认没有视觉提示，
+   给一点极淡的反馈，鼠标移上去才看得出来可以拉。 */
+.rnd-handle:hover {
+  background: color-mix(in srgb, var(--accent) 12%, transparent) !important;
+}
+
+/* 移动端：桌面图标网格改成四列铺开，避免挤成一长条 */
+@media (max-width: 767px) {
+  .desktop-grid {
+    grid-auto-flow: row !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-rows: none !important;
+  }
+}
+
+/* 数字用等宽数字，时钟跳动时宽度不会忽宽忽窄 */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 任务栏横向滚动条：细到几乎看不见，只在不小心滑出时提示一下 */
+.taskbar-scroll::-webkit-scrollbar {
+  height: 3px;
+}
+.taskbar-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 3px;
+}
+.taskbar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 开始菜单滚动条 */
+.startmenu-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.startmenu-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.22);
+  border-radius: 3px;
+}
+.startmenu-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/*
+  移动端任务栏精简：
+    - 只留"当前最前窗口"一个按钮，避免挤爆
+    - 时钟只显示时间（日期由组件层控制隐藏）
+    - 开始菜单改成全屏宽
+  注意这里讨论的是任务栏内部元素，和上面 .desktop-grid 是两回事。
+*/
+@media (max-width: 767px) {
+  .taskbar-window-list > button:not(:first-child) {
+    display: none;
+  }
+}
+
+/* ============================================================
+   Markdown 正文排版 —— .md-body
+   ============================================================
+
+   ⚠️ 这一段是整个第四阶段的核心。
+
+   本站有两套 Markdown 渲染路径：
+
+     路径 A：静态文章页 /posts/[slug]
+             Astro 在构建期渲染 .md → HTML → 直接写进产物
+
+     路径 B：桌面窗口里读文章
+             React 在运行时用 marked 渲染同一个 .md → HTML
+
+   两条路的 HTML 产出是【两个不同的渲染器给的】，几乎必然有细节差异。
+   如果排版规则写两遍，早晚会分叉 —— 某天你调了静态页的行高，
+   忘了改窗口里的，同一个站里同一个标签长得不一样。
+
+   解法：两边产出的 HTML 都套上 .md-body，规则只写这一处。
+
+   为什么用原生 CSS 而不是 Tailwind？
+     Markdown 渲染器产出的是【裸标签】，不带任何 class：
+        <h2>…</h2>  <p>…</p>  <ul><li>…</li></ul>
+     没有 class，就没法用工具类去命中它。硬要用 Tailwind 只能写
+        [&_h2]:text-[21px] [&_h2]:border-b …
+     二十个标签下来就是一面墙，可读性极差。
+
+     判断标准很朴素：当你需要给「自己控制不了的一整片 HTML」做样式时，
+     原生 CSS + 后代选择器就是更合适的工具。
+   ============================================================ */
+
+.md-body {
+  font-size: 15px;
+  line-height: 1.85;
+  color: var(--fg);
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.md-body > *:first-child {
+  margin-top: 0;
+}
+.md-body > *:last-child {
+  margin-bottom: 0;
+}
+
+/* ── 标题 ── */
+.md-body h1,
+.md-body h2,
+.md-body h3,
+.md-body h4 {
+  margin: 1.8em 0 0.7em;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--fg);
+  scroll-margin-top: 12px;
+}
+.md-body h1 {
+  font-size: 25px;
+}
+.md-body h2 {
+  font-size: 21px;
+  padding-bottom: 0.35em;
+  border-bottom: 1px solid var(--surface-border);
+}
+.md-body h3 {
+  font-size: 17px;
+}
+.md-body h4 {
+  font-size: 15px;
+  color: var(--fg-dim);
+}
+
+/* ── 段落 ── */
+.md-body p {
+  margin: 0 0 1.1em;
+}
+
+/* ── 链接 ── */
+.md-body a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  transition: border-color 0.15s, color 0.15s;
+}
+.md-body a:hover {
+  color: var(--accent-hover);
+  border-bottom-color: var(--accent-hover);
+}
+
+/* ── 强调 ── */
+.md-body strong {
+  font-weight: 600;
+  color: var(--fg);
+}
+.md-body em {
+  font-style: italic;
+}
+
+/* ── 列表 ── */
+.md-body ul,
+.md-body ol {
+  margin: 0 0 1.1em;
+  padding-left: 1.6em;
+}
+.md-body ul {
+  list-style: disc;
+}
+.md-body ol {
+  list-style: decimal;
+}
+.md-body li {
+  margin: 0.35em 0;
+}
+.md-body li > ul,
+.md-body li > ol {
+  margin: 0.35em 0 0.35em;
+}
+
+/*
+  任务列表（- [ ] / - [x]）：
+  gfm 模式下 marked 会产出 <li class="task-list-item"> 和 <input type=checkbox>。
+  这里把默认的 ul 圆点去掉，改由复选框本身当标记。
+*/
+.md-body li.task-list-item {
+  list-style: none;
+  margin-left: -1.4em;
+}
+.md-body li.task-list-item input {
+  margin-right: 0.5em;
+  vertical-align: middle;
+}
+
+/* ── 引用块 ── */
+.md-body blockquote {
+  margin: 1.3em 0;
+  padding: 0.15em 0 0.15em 14px;
+  border-left: 3px solid var(--surface-border);
+  color: var(--fg-dim);
+}
+.md-body blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+/* ── 行内代码 ── */
+.md-body code {
+  padding: 0.15em 0.4em;
+  border-radius: 3px;
+  background: var(--hover-strong);
+  font-family: Consolas, "SFMono-Regular", "Courier New", monospace;
+  font-size: 0.9em;
+  color: #c0392b;
+}
+.theme-dark .md-body code {
+  /* 暗色下 #c0392b 对比度不足，换成更亮的红 */
+  color: #f08a7a;
+}
+
+/* ── 代码块 ── */
+/*
+  ⚠️ 这里有个真实的坑，值得说明。
+
+  Astro 在构建期渲染 Markdown 时会用 Shiki 做语法高亮，产出的 pre 长这样：
+
+      <pre class="astro-code github-dark"
+           style="background-color:#24292e;color:#e1e4e8">
+
+  注意它带【内联 style】。#24292e 就是 github-dark 主题的背景色。
+  内联样式的优先级高于任何类选择器，所以这里的 background 对静态页
+  【完全不起作用】—— 静态页永远是 #24292e。
+
+  而窗口内那条路用的是 marked，产出的 pre 是裸标签，于是走这里的规则。
+
+  结果就是：同一个站，代码块背景色居然不一样。
+  这个问题是肉眼很难发现的（两个深色差 6 个色阶），
+  但用脚本量 getComputedStyle 一下就暴露了。
+
+  解法有两个：
+    A. 把这里的颜色改成和 github-dark 一致（#24292e）→ 立即可对齐
+    B. 在 astro.config.mjs 里把 Shiki 配成和这里一样的主题
+
+  我选了 A，并且用了 inline-style 无法覆盖的 !important 兜底 ——
+  这样即使以后 Astro 换了默认主题，静态页至少和窗口内保持同一色。
+
+  更彻底的做法是在 astro.config.mjs 里定主题：
+      markdown: {
+        shikiConfig: { theme: "github-dark", wrap: true }
+      }
+  这样主题就是显式的，不依赖版本默认值。
+*/
+.md-body pre {
+  margin: 1.2em 0;
+  padding: 14px 16px;
+  border-radius: 6px;
+  /* !important 在这里是有意为之：它要压过 Shiki 写在内联 style 里的背景色 */
+  background: #24292e !important;
+  overflow-x: auto;
+  line-height: 1.6;
+}
+.md-body pre code {
+  padding: 0;
+  background: none;
+  color: #e1e4e8;
+  font-size: 13px;
+}
+.md-body pre::-webkit-scrollbar {
+  height: 8px;
+}
+.md-body pre::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+/* ── 表格 ── */
+.md-body table {
+  width: 100%;
+  margin: 1.2em 0;
+  border-collapse: collapse;
+  font-size: 14px;
+  /* 窄屏下表格允许横向滚动，而不是把窗口撑破 */
+  display: block;
+  overflow-x: auto;
+}
+.md-body th,
+.md-body td {
+  padding: 8px 12px;
+  border: 1px solid var(--surface-border);
+  text-align: left;
+  vertical-align: top;
+}
+.md-body th {
+  background: var(--surface-2);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* ── 分割线 ── */
+.md-body hr {
+  height: 1px;
+  margin: 2em 0;
+  border: 0;
+  background: var(--surface-border);
+}
+
+/* ── 图片 ── */
+.md-body img {
+  max-width: 100%;
+  height: auto;
+  margin: 1em 0;
+  border-radius: 4px;
+}
+
+/* ============================================================
+   文章头部信息（标题 + 日期 + 分类 + 标签）
+   静态页和窗口内共用，同样为了避免两处样式分叉。
+   ============================================================ */
+
+.md-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-bottom: 22px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--surface-border);
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+
+.md-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: color-mix(in srgb, var(--accent) 80%, var(--fg));
+  font-size: 11px;
+  line-height: 1.7;
+  text-decoration: none;
+  border: none;
+  transition: background 0.15s;
+}
+.md-chip:hover {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+/* ============================================================
+   文章列表卡片 —— .post-card
+   同样两边共用。
+   ============================================================ */
+
+.post-card {
+  display: block;
+  padding: 14px 16px;
+  border: 1px solid var(--surface-border);
+  border-left: 3px solid var(--accent);
+  border-radius: 4px;
+  background: var(--surface);
+  text-decoration: none;
+  transition: box-shadow 0.15s, transform 0.1s, border-color 0.15s;
+}
+.post-card:hover {
+  box-shadow: 0 3px 12px rgba(15, 30, 55, 0.1);
+  transform: translateY(-1px);
+}
+.theme-dark .post-card:hover {
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.45);
+}
+.post-card-title {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--fg);
+  line-height: 1.45;
+}
+.post-card-desc {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--fg-dim);
+}
+.post-card-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--fg-faint);
+}

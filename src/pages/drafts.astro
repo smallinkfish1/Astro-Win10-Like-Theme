@@ -1,0 +1,84 @@
+---
+import ContentLayout from "../layouts/ContentLayout.astro";
+import { getPosts } from "../lib/posts";
+import { formatDate, readingTime } from "../lib/markdown";
+
+/**
+ * 草稿页（对应桌面上的"回收站"）。
+ *
+ * ⚠️ 一个要提前想清楚的问题：草稿页该不该被搜索引擎收录？
+ *
+ *    我的选择是【不该】，所以这里加了 noindex。
+ *    草稿页的链接也不会出现在任何公开页面里。
+ *
+ *    但 /posts/[slug] 对草稿是【可访问】的 —— 这样你能把预览链接
+ *    直接发给朋友看。这是"可访问但不可索引"的经典组合：
+ *      可访问 = 有 URL 就能打开
+ *      不可索引 = 爬虫不会主动收录
+ */
+const drafts = await getPosts(true).then((all) => all.filter((p) => p.draft));
+---
+
+<ContentLayout
+  title="草稿箱"
+  description="尚未完成的文章，不会出现在公开列表中。"
+  canonical="/drafts"
+>
+  <head>
+    {/* 双保险：meta noindex + 下面的 robots.txt 规则 */}
+    <meta name="robots" content="noindex, nofollow" />
+  </head>
+
+  <div class="mb-6">
+    <h1 class="m-0 text-[24px] font-semibold text-[var(--fg)]">🗑️ 草稿箱</h1>
+    <p class="mt-2 text-[13px] text-[var(--fg-dim)]">
+      {drafts.length} 篇未完成 · 不参与列表、归档、标签和搜索
+    </p>
+  </div>
+
+  <div class="flex flex-col gap-3">
+    {
+      drafts.map((p) => (
+        <div class="rounded border border-dashed border-[var(--surface-border)] bg-[var(--surface)] p-4">
+          <div class="mb-2 flex items-baseline gap-2">
+            <span class="text-[14px]">📝</span>
+            <h2 class="m-0 flex-1 text-[15px] font-medium text-[var(--fg-dim)]">{p.title}</h2>
+            <span class="shrink-0 rounded bg-[var(--surface-3)] px-1.5 py-px text-[10px] text-[var(--fg-dim)]">
+              草稿
+            </span>
+          </div>
+
+          <p class="m-0 text-[12.5px] leading-relaxed text-[var(--fg-dim)]">
+            {p.description || "（暂无摘要）"}
+          </p>
+
+          <div class="mt-2.5 flex flex-wrap items-center gap-3 text-[11.5px] text-[var(--fg-faint)]">
+            <span>{formatDate(p.pubDate)}</span>
+            <span>{readingTime(p.body)}</span>
+            <span>{p.body.length} 字符</span>
+            <a
+              href={`/posts/${p.slug}`}
+              class="ml-auto text-[var(--accent)] no-underline hover:underline"
+            >
+              预览静态页 ↗
+            </a>
+          </div>
+        </div>
+      ))
+    }
+  </div>
+
+  {
+    drafts.length === 0 && (
+      <div class="py-20 text-center text-[var(--fg-faint)]">
+        <div class="text-[38px] leading-none opacity-40">🗑️</div>
+        <p class="mt-3 text-[13px]">回收站是空的</p>
+      </div>
+    )
+  }
+
+  <p class="mt-10 border-t border-[var(--surface-border)] pt-5 text-[12.5px] text-[var(--fg-faint)]">
+    这个页面标记了 noindex，不会被搜索引擎收录。
+    <a href="/" class="ml-1 text-[var(--accent)] no-underline hover:underline">回到桌面</a>
+  </p>
+</ContentLayout>

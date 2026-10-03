@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+
+# 草稿箱不该被收录 —— 换文章时这里不用改
+Disallow: /drafts
+
+Sitemap: https://example.com/sitemap.xml

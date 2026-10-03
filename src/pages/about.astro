@@ -1,0 +1,186 @@
+---
+import ContentLayout from "../layouts/ContentLayout.astro";
+import { getStats, getPosts } from "../lib/posts";
+import { formatDate } from "../lib/markdown";
+
+const stats = await getStats();
+const latest = (await getPosts(false)).slice(0, 5);
+---
+
+<ContentLayout
+  title="关于"
+  description="一个把博客做成 Windows 10 桌面的地方的站点说明。"
+  canonical="/about"
+>
+  <div class="mb-8 flex items-start gap-5">
+    <div
+      class="grid h-16 w-16 shrink-0 place-items-center rounded-full text-[28px] text-white"
+      style="background:linear-gradient(135deg,#2b579a,#1b6fb5)"
+    >
+      👤
+    </div>
+    <div>
+      <h1 class="m-0 text-[24px] font-semibold text-[var(--fg)]">关于这个站</h1>
+      <p class="mt-2 text-[13.5px] leading-relaxed text-[var(--fg-dim)]">
+        一个把博客界面做成 Windows 10 桌面的地方。双击图标开窗口，
+        任务栏切换窗口，开始菜单里是真实的分类和标签。
+      </p>
+    </div>
+  </div>
+
+  {/* ── 站点统计 ── */}
+  <section class="mb-9">
+    <h2 class="mb-4 border-b border-[var(--surface-border)] pb-2 text-[16px] font-semibold text-[var(--fg)]">
+      站点统计
+    </h2>
+    <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {
+        [
+          { k: "文章", v: stats.postCount, u: "篇" },
+          { k: "分类", v: stats.categoryCount, u: "个" },
+          { k: "标签", v: stats.tagCount, u: "个" },
+          { k: "字数", v: stats.wordCount.toLocaleString("en-US"), u: "约" },
+        ].map((s) => (
+          <div class="rounded border border-[var(--surface-border)] bg-[var(--surface)] px-4 py-3.5 text-center">
+            <div class="text-[22px] font-semibold tabular-nums text-[var(--accent)]">{s.v}</div>
+            <div class="mt-1 text-[11.5px] text-[var(--fg-faint)]">
+              {s.u} {s.k}
+            </div>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+
+  {/* ── 架构说明：这一节其实是本站的技术自述 ── */}
+  <section class="mb-9">
+    <h2 class="mb-4 border-b border-[var(--surface-border)] pb-2 text-[16px] font-semibold text-[var(--fg)]">
+      这个站是怎么搭的
+    </h2>
+
+    <div class="md-body">
+      <p>
+        界面看起来像个操作系统，但底层是<strong>静态站点</strong>。
+        每一篇文章都有独立的静态 HTML，禁用 JavaScript 也能完整阅读。
+      </p>
+
+      <p>具体分工是这样的：</p>
+
+      <ul>
+        <li>
+          <strong>静态壳</strong>：Astro 在构建期把页面渲染成纯 HTML，
+          爬虫和禁用 JS 的浏览器看到的就是它。
+        </li>
+        <li>
+          <strong>交互岛</strong>：整个桌面只有一个 React 组件
+          （窗口系统 + 任务栏），负责拖拽、状态和时钟。
+        </li>
+        <li>
+          <strong>共享排版</strong>：静态页和窗口内的正文共用同一个
+          <code>.md-body</code> 类，所以两处渲染的视觉完全一致。
+        </li>
+      </ul>
+
+      <blockquote>
+        体验走客户端，但内容和入口不依赖 JavaScript —— 这是本站从第一天
+        就定下的纪律。
+      </blockquote>
+
+      <p>技术栈：</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>层</th>
+            <th>选型</th>
+            <th>为什么</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>框架</td>
+            <td>Astro</td>
+            <td>默认零 JS，岛屿按需挂载</td>
+          </tr>
+          <tr>
+            <td>交互</td>
+            <td>React</td>
+            <td>窗口系统状态复杂，需要组件化</td>
+          </tr>
+          <tr>
+            <td>状态</td>
+            <td>Zustand</td>
+            <td>比 Context 简单，比 Redux 轻</td>
+          </tr>
+          <tr>
+            <td>拖拽</td>
+            <td>react-rnd</td>
+            <td>拖拽 + 缩放一体，省掉自研</td>
+          </tr>
+          <tr>
+            <td>样式</td>
+            <td>Tailwind + 原生 CSS</td>
+            <td>组件用工具类，Markdown 产出物用作用域 CSS</td>
+          </tr>
+          <tr>
+            <td>内容</td>
+            <td>Content Collections</td>
+            <td>构建期校验 frontmatter，有类型提示</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  {/* ── 找到我 ── */}
+  <section class="mb-9">
+    <h2 class="mb-4 border-b border-[var(--surface-border)] pb-2 text-[16px] font-semibold text-[var(--fg)]">
+      找到我
+    </h2>
+    <div class="grid gap-3 sm:grid-cols-2">
+      {
+        [
+          { icon: "🐙", label: "GitHub", href: "https://github.com", note: "源码" },
+          { icon: "📡", label: "RSS", href: "/rss.xml", note: "订阅" },
+          { icon: "✉️", label: "Email", href: "mailto:me@example.com", note: "联系" },
+          { icon: "🗺️", label: "Sitemap", href: "/sitemap.xml", note: "站点地图" },
+        ].map((l) => (
+          <a
+            href={l.href}
+            class="flex items-center gap-3 rounded border border-[var(--surface-border)] bg-[var(--surface)] px-4 py-3 no-underline transition-colors hover:border-[var(--accent)] hover:bg-[var(--surface-2)]"
+          >
+            <span class="text-[17px]">{l.icon}</span>
+            <span class="flex-1 text-[13.5px] text-[var(--fg)]">{l.label}</span>
+            <span class="text-[11.5px] text-[var(--fg-faint)]">{l.note} ↗</span>
+          </a>
+        ))
+      }
+    </div>
+  </section>
+
+  {/* ── 最近更新 ── */}
+  {
+    latest.length > 0 && (
+      <section>
+        <h2 class="mb-4 border-b border-[var(--surface-border)] pb-2 text-[16px] font-semibold text-[var(--fg)]">
+          最近更新
+        </h2>
+        <ul class="m-0 flex list-none flex-col gap-2 p-0">
+          {latest.map((p) => (
+            <li class="flex items-baseline gap-3">
+              <span class="shrink-0 text-[11.5px] tabular-nums text-[var(--fg-faint)]">
+                {formatDate(p.pubDate)}
+              </span>
+              <a
+                href={`/posts/${p.slug}`}
+                class="min-w-0 flex-1 truncate text-[13.5px] text-[var(--fg)] no-underline hover:text-[var(--accent)] hover:underline"
+              >
+                {p.title}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )
+  }
+</ContentLayout>

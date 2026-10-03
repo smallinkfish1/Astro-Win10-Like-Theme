@@ -1,17 +1,59 @@
 ---
+import DesktopLayout from "../layouts/DesktopLayout.astro";
+import Desktop from "../components/desktop/Desktop.astro";
+import WindowManager from "../components/window/WindowManager.tsx";
+import Taskbar from "../components/taskbar/Taskbar.tsx";
+import { getPosts, getCategories, getTags, getStats } from "../lib/posts";
+import { toClientPosts } from "../lib/markdown";
 
+/**
+ * 桌面首页。
+ *
+ * ⚠️ 这里是「Astro 构建期」和「React 运行时」的接缝，只做一件事：
+ *    把构建期算好的数据序列化，喂给客户端岛屿。
+ *
+ *    为什么不能在岛屿里直接调用 getPosts()？
+ *      因为 getPosts 依赖 astro:content 的编译期机制，在浏览器里跑会直接报错。
+ *      数据只能「构建期算 → 序列化成 props → 运行时消费」。
+ *
+ *    所以下面这几个 await 在构建时执行一次，产物里留下的只是
+ *    普通 HTML 和一份 JSON。
+ */
+
+const posts = toClientPosts(await getPosts(false));
+// 草稿单独取一份，给「回收站」窗口用
+const drafts = toClientPosts((await getPosts(true)).filter((p) => p.draft));
+const tags = await getTags();
+const categories = await getCategories();
+const stats = await getStats();
 ---
 
-<html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<link rel="icon" href="/favicon.ico" />
-		<meta name="viewport" content="width=device-width" />
-		<meta name="generator" content={Astro.generator} />
-		<title>Astro</title>
-	</head>
-	<body>
-		<h1>Astro</h1>
-	</body>
-</html>
+<DesktopLayout title="我的桌面">
+  {/* 窗口层：react-rnd 用 bounds="parent" 把窗口限制在这个容器内，
+      所以这个容器必须有定位上下文且铺满视口。
+
+      ⚠️ 关键：client:load / client:only 会给组件套一层 <astro-island> 标签，
+      而那层标签的实际尺寸是 0×0。如果 bounds 直接指向它，
+      react-rnd 会把拖拽范围算成 0×0，窗口一拖就被钳回原点。
+      所以这里用 client:only + 一个自己控制的满屏容器来当 bounds 目标。 */}
+  <main class="absolute inset-0" id="os-window-layer">
+    <div class="absolute inset-0">
+      <WindowManager
+        client:only="react"
+        posts={posts}
+        drafts={drafts}
+        tags={tags}
+        categories={categories}
+        stats={stats}
+      />
+    </div>
+  </main>
+
+  {/* 桌面图标层：在 DOM 里排在窗口层之后，
+      但窗口的 z-index 从 10 起，所以图标始终在窗口下方。 */}
+  <Desktop />
+
+  {/* 任务栏：固定在底部，z-index 100，压在窗口之上。
+      开始菜单（z-110）再压在它之上。 */}
+  <Taskbar client:only="react" categories={categories} tags={tags} />
+</DesktopLayout>

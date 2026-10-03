@@ -1,0 +1,133 @@
+---
+import ContentLayout from "../layouts/ContentLayout.astro";
+
+/**
+ * 控制面板静态页（对应 /settings）。
+ *
+ * ⚠️ 这个页面【不做主题切换功能】。
+ *
+ *    原因：主题状态存在 <html> 的 class 上，而那套逻辑跑在桌面
+ *    （React 岛屿）里。静态页是另一套布局，没有那个岛屿。
+ *
+ *    与其在这里维护第二套设置 UI（代码分叉、状态不同步），
+ *    不如让它当一个"说明页 + 入口"：
+ *    告诉用户设置在哪里，并给一个回桌面的链接。
+ *
+ *    真正能操作的控制面板在桌面上的「控制面板」图标里。
+ *    这正是「静态页 + 窗口化」这套架构的一贯做法 ——
+ *    静态页保证可访问和可分享，交互功能交给桌面。
+ */
+---
+
+<ContentLayout
+  title="控制面板"
+  description="调整博客桌面的外观：暗色模式、毛玻璃效果、界面动画。"
+  canonical="/settings"
+>
+  <div class="mb-6">
+    <h1 class="m-0 text-[24px] font-semibold text-[var(--fg)]">⚙️ 控制面板</h1>
+    <p class="mt-2 text-[13px] text-[var(--fg-dim)]">
+      桌面外观设置的说明与入口
+    </p>
+  </div>
+
+  <div class="mb-8 rounded border border-[var(--surface-border)] bg-[var(--surface)] p-5">
+    <p class="m-0 text-[13.5px] leading-relaxed text-[var(--fg-dim)]">
+      外观设置在<strong>桌面上的「控制面板」窗口</strong>里操作，
+      可以切换暗色模式、开关毛玻璃效果和界面动画。
+    </p>
+    <p class="mt-3 text-[12.5px] leading-relaxed text-[var(--fg-dim)]">
+      设置保存在浏览器本地（localStorage），换设备不会同步。
+      清除浏览器数据会重置为默认值。
+    </p>
+    <a
+      href="/"
+      class="mt-4 inline-flex items-center gap-1.5 rounded bg-[var(--accent)] px-3.5 py-2 text-[12.5px] text-white no-underline transition-colors hover:bg-[var(--accent-hover)]"
+    >
+      ← 回到桌面
+    </a>
+  </div>
+
+  <section class="mb-8">
+    <h2 class="mb-4 border-b border-[var(--surface-border)] pb-2 text-[16px] font-semibold text-[var(--fg)]">
+      可调整的项目
+    </h2>
+
+    <div class="flex flex-col gap-3">
+      {
+        [
+          {
+            icon: "🌙",
+            title: "暗色模式",
+            desc: "整个桌面、窗口、开始菜单切换为暗色配色。首次访问会自动跟随系统偏好。",
+          },
+          {
+            icon: "🪟",
+            title: "毛玻璃效果",
+            desc: "任务栏和开始菜单的半透明模糊材质。关闭后改为不透明底色，在低配设备上更流畅。",
+          },
+          {
+            icon: "✨",
+            title: "界面动画",
+            desc: "窗口缩放、开始菜单滑入、磁贴悬停等动效。关闭后所有过渡立即完成。",
+          },
+        ].map((item) => (
+          <div class="flex items-start gap-3.5 rounded border border-[var(--surface-border)] bg-[var(--surface)] px-4 py-3.5">
+            <span class="text-[18px] leading-none">{item.icon}</span>
+            <div class="min-w-0 flex-1">
+              <div class="text-[13.5px] font-medium text-[var(--fg)]">{item.title}</div>
+              <p class="mt-1 text-[12.5px] leading-relaxed text-[var(--fg-dim)]">{item.desc}</p>
+            </div>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+
+  <section>
+    <h2 class="mb-4 border-b border-[var(--surface-border)] pb-2 text-[16px] font-semibold text-[var(--fg)]">
+      实现说明
+    </h2>
+    <div class="md-body">
+      <p>
+        外观设置全部由 <strong>CSS 变量</strong> 驱动：颜色、材质、动画时长
+        都定义在 <code>:root</code> 里，暗色模式只做一件事 ——
+        覆盖这些变量的值，不碰任何组件代码。
+      </p>
+
+      <p>三个开关对应 <code>&lt;html&gt;</code> 上的三个类：</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>开关</th>
+            <th>类名</th>
+            <th>作用方式</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>暗色模式</td>
+            <td><code>.theme-dark</code></td>
+            <td>覆盖 :root 里的颜色变量</td>
+          </tr>
+          <tr>
+            <td>毛玻璃</td>
+            <td><code>.no-acrylic</code></td>
+            <td>移除 backdrop-filter 并改用实色底</td>
+          </tr>
+          <tr>
+            <td>界面动画</td>
+            <td><code>.no-anim</code></td>
+            <td>把所有动画时长压成 0.01ms</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <blockquote>
+        主题类由一段内联在 <code>&lt;head&gt;</code> 的同步脚本在首帧之前打上，
+        所以暗色模式用户不会看到刷新时的"闪白"。
+      </blockquote>
+    </div>
+  </section>
+</ContentLayout>

@@ -1,0 +1,48 @@
+---
+import ContentLayout from "../../layouts/ContentLayout.astro";
+import PostCard from "../../components/article/PostCard.astro";
+import { getPosts, getCategories, getTags } from "../../lib/posts";
+import { toClientPosts } from "../../lib/markdown";
+
+/**
+ * 全部文章列表（静态版）。
+ *
+ * 这个页面存在的意义就是 SEO：
+ *   每一篇文章的链接都在这里的 HTML 里，爬虫从这一页能爬到全部内容。
+ *
+ * 桌面上的"我的文档"窗口是它的窗口化版本，两者读的是同一份数据
+ * （都来自 getPosts），所以永远同步。
+ */
+const posts = await getPosts(false);
+const cards = toClientPosts(posts);
+const categories = await getCategories();
+const tags = await getTags();
+---
+
+<ContentLayout
+  title="全部文章"
+  description={`共 ${posts.length} 篇文章，涵盖 ${categories.map((c) => c.name).join("、")} 等分类。`}
+  canonical="/posts"
+>
+  <div class="mb-6">
+    <h1 class="m-0 text-[24px] font-semibold text-[var(--fg)]">全部文章</h1>
+    <p class="mt-2 text-[13px] text-[var(--fg-dim)]">
+      共 {posts.length} 篇 · {categories.length} 个分类 · {tags.length} 个标签
+    </p>
+  </div>
+
+  <div class="flex flex-col gap-3">
+    {cards.map((p) => <PostCard post={p} />)}
+  </div>
+
+  {posts.length === 0 && (
+    <p class="py-16 text-center text-[13px] text-[var(--fg-faint)]">还没有文章。</p>
+  )}
+
+  <nav class="mt-10 border-t border-[var(--surface-border)] pt-5 text-[12.5px] text-[var(--fg-faint)]">
+    也可以看
+    <a href="/archive" class="mx-1 text-[var(--accent)] no-underline hover:underline">归档</a>
+    或
+    <a href="/tags" class="mx-1 text-[var(--accent)] no-underline hover:underline">标签</a>
+  </nav>
+</ContentLayout>
