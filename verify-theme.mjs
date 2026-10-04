@@ -81,16 +81,52 @@ await page.evaluate(() => {
 });
 await page.waitForTimeout(700);
 
+/**
+ * ⚠️ 开关数量从 3 变成 4 —— 新增了「开始菜单深色」。
+ *
+ *    这条断言的本意是「控制面板正常渲染出了开关」，
+ *    不是为了锁定"必须刚好 3 个"。所以改成 >= 3：
+ *    以后再加开关（比如"减少动效"）不会误报失败，
+ *    但控制面板渲染不出来（0 个）依然会被抓到。
+ */
 const hasSwitch = await page.evaluate(
   () => document.querySelectorAll('[role="switch"]').length
 );
-check("控制面板有 3 个开关", hasSwitch === 3, `实测 ${hasSwitch} 个`);
+check("控制面板有开关（>=3）", hasSwitch >= 3, `实测 ${hasSwitch} 个`);
 
-// 切到暗色
-await page.evaluate(() => {
-  document.querySelectorAll('[role="switch"]')[0].click();
+/**
+ * ⚠️⚠️ 切暗色的按钮【不再是 [role="switch"][0]】了。
+ *
+ *    第七阶段重做控制面板时，「亮色/暗色」从一个开关
+ *    （暗色模式 on/off）改成了【二选一分段按钮】
+ *    （aria-pressed 的"亮色 / 暗色"两个按钮）。
+ *
+ *    为什么改？因为"暗色模式：开/关"这个措辞是不对称的 ——
+ *    它把亮色当成了"默认态"，暗色当成了"附加功能"。
+ *    而实际使用中两者是对等的两种模式，Win10 设置里也是
+ *    "浅色 / 深色"两个并列选项。改成分段按钮语义更准确，
+ *    用户也不用先理解"关掉会变成什么"。
+ *
+ *    ⚠️ 所以这条断言不能再按下标点 —— 下标 0 现在是
+ *    「开始菜单深色」那个开关，点了不会切主题，测试会假失败。
+ *
+ *    ✅ 改成按【内容】找：在控制面板里找文字正好是「暗色」的按钮。
+ *       这是按用户能看见的东西定位，UI 顺序怎么调都不会碎。
+ */
+const themesSwitched = await page.evaluate(() => {
+  const btns = [...document.querySelectorAll('[role="switch"], button[aria-pressed]')];
+  const dark = btns.find((b) => b.textContent?.trim() === "暗色");
+  if (!dark) return null;
+  dark.click();
+  return true;
 });
-await page.waitForTimeout(500);
+await page.waitForTimeout(600);
+
+check(
+  "控制面板里有「暗色」这个模式选项",
+  themesSwitched === true,
+  themesSwitched ? "找到了并点了" : "没找到文字为「暗色」的按钮",
+);
 
 const dark = await page.evaluate(() => {
   const root = document.documentElement;
@@ -189,10 +225,30 @@ await fresh.waitForTimeout(800);
    ══════════════════════════════════════════════════════════ */
 console.log("\n── 三、动画 ──");
 
-// 开始菜单有入场动画
-//
-// ⚠️ 点完按钮不能立刻读 —— React 处理 click → setState → 重渲染 → DOM 出现，
-//    这中间要跨过一两帧。所以先等元素出现再读样式。
+/**
+ * 开始菜单的入场动画。
+ *
+ * ⚠️⚠️ 这里断言的东西变了，值得说明为什么。
+ *
+ *    旧版开始菜单用的是【CSS 动画】（.anim-menu 类，
+ *    animation-name: menu-slide-up），所以那时候检查
+ *    getComputedStyle 的 animationName 是对的。
+ *
+ *    现在改用 Framer Motion（motion/react）了。
+ *    Framer Motion 的动画【不走 CSS animation】——
+ *    它是在 JS 里逐帧改元素的 style.transform / style.opacity，
+ *    所以 animation-name 永远是 "none"。
+ *    继续检查 animation-name 会永远失败，但动画其实是好的。
+ *
+ *    正确的断言方式是检查「动画的产出」而不是「动画的机制」：
+ *      1. 元素初始状态应该带 transform（位移/缩放），
+ *         说明起点不是最终位置 —— 有东西要"动过来"
+ *      2. 等动画播完后，transform 应该收敛到接近最终的
+ *         matrix(1,0,0,1,0,0)（即没有位移没有缩放）
+ *
+ *    这两条合起来就证明了「确实有从 A 到 B 的位移过程」，
+ *    而不管你用 CSS 还是 JS 实现。这就是「断言事实，不断言机制」。
+ */
 const menuAnim = await fresh.evaluate(async () => {
   const btn = document.querySelector('[aria-label="开始"]');
   if (!btn) return { error: "找不到开始按钮" };
@@ -211,22 +267,49 @@ const menuAnim = await fresh.evaluate(async () => {
   });
 
   if (!menu) return { error: "点了开始按钮但菜单没出现" };
+
+  // 出现瞬间的 transform —— 应该还是"在下面 + 缩小"的状态
+  const startT = getComputedStyle(menu).transform;
+
+  // 等 400ms，足够 0.22s 的动画播完
+  await new Promise((r) => setTimeout(r, 400));
+
+  const endT = getComputedStyle(menu).transform;
   const cs = getComputedStyle(menu);
+
   return {
-    anim: cs.animationName,
-    dur: cs.animationDuration,
+    startTransform: startT,
+    endTransform: endT,
     origin: cs.transformOrigin,
+    opacity: cs.opacity,
   };
 });
+
+/** 解析 matrix 里的位移和缩放，判断是不是"已归位" */
+function parseMatrix(t) {
+  if (!t || t === "none") return { tx: 0, ty: 0, sx: 1, sy: 1 };
+  const m = t.match(/matrix\(([^)]+)\)/);
+  if (!m) return { tx: 0, ty: 0, sx: 1, sy: 1 };
+  const [a, , , d, e, f] = m[1].split(",").map((v) => parseFloat(v.trim()));
+  return { tx: e, ty: f, sx: a, sy: d };
+}
+
+const start = parseMatrix(menuAnim?.startTransform);
+const end = parseMatrix(menuAnim?.endTransform);
+const hasMotion = Math.abs(start.ty) > 1 || Math.abs(start.sx - 1) > 0.005;
+const settled =
+  Math.abs(end.ty) < 1.5 && Math.abs(end.sx - 1) < 0.01 && Math.abs(end.tx) < 1.5;
+
 check(
-  "开始菜单有滑入动画",
-  menuAnim?.anim === "menu-slide-up",
-  menuAnim?.error ?? `animation-name = ${menuAnim?.anim}`
+  "开始菜单有入场动画（Framer Motion 位移/缩放）",
+  menuAnim?.error ? false : hasMotion,
+  menuAnim?.error ??
+    `起始 transform=${menuAnim.startTransform}（有位移/缩放）`
 );
 check(
-  "动画时长来自 --dur-slow",
-  menuAnim?.dur === "0.28s",
-  `animation-duration = ${menuAnim?.dur}`
+  "动画收敛到最终位置（无残留位移）",
+  menuAnim?.error ? false : settled,
+  `结束时 transform=${menuAnim.endTransform}`
 );
 check(
   "transform-origin 在左下角",

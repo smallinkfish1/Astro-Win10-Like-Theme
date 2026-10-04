@@ -1,6 +1,26 @@
 @import "tailwindcss";
 
 /* ============================================================
+   KaTeX 样式（LaTeX 公式渲染）
+   ============================================================
+   ⚠️ 为什么在这里 import，而不是在某个组件里？
+
+      因为公式会出现在【两条渲染路径】上：
+        A. 静态文章页  /posts/[slug]  ← Astro 构建期渲染
+        B. 窗口内      ArticleView     ← marked 在浏览器里渲染
+
+      global.css 是这两条路径【唯一共用】的样式文件。
+      在这里 import 一次，两边自动都拿到公式样式，不用改两处。
+      如果在组件里 import，很容易只改了一条路径 ——
+      结果就是「静态页公式正常，窗口里公式没样式」这种割裂。
+
+   ⚠️ 这个 CSS 里引用了 60 个字体文件（KaTeX_*.woff2），
+      它们会被 Vite 自动处理并在构建时复制到 dist/_astro/。
+      缺了字体，公式会退化成难看的等宽字形 —— 所以 CSS 和字体必须一起走。
+   ============================================================ */
+@import "katex/dist/katex.min.css";
+
+/* ============================================================
    Win10 主题设计令牌（Design Tokens）
    ============================================================
 
@@ -128,6 +148,92 @@
 }
 
 /* ============================================================
+   壁纸切换（控制面板 → 外观 → 壁纸）
+   ============================================================
+   作用方式是 <html data-wallpaper="xxx">，配合 .theme-dark 组合出
+   「哪张壁纸 × 亮还是暗」，两个维度各管各的。
+
+   ⚠️⚠️ 这里为什么要用 !important？
+   ============================================================
+   `--wallpaper` 在 :root 里和 .theme-dark 里都被赋值过。
+   而 [data-wallpaper="x"] 选择器的特异性（0,1,0）和 .theme-dark
+   （0,1,0）【完全相同】—— 平手。
+
+   平手时按【出现顺序】决胜：后出现的赢。
+   而 .theme-dark 在文件里的位置比这一节靠前……看起来本节能赢。
+   但只要有人以后往 .theme-dark 块里加一行，或者换个打包器调整了
+   规则顺序，胜负就会翻转，而且表现是"暗色下壁纸突然变回默认"，
+   极难定位。
+
+   加上 !important 把这件事变成【不依赖顺序】的：
+   本节的值永远覆盖 :root 和 .theme-dark 里的值，
+   而下面 .theme-dark 组合选择器又用 !important 覆盖本节。
+   显式声明优先级，比"碰巧顺序对"可靠得多。
+
+   ⚠️ 另一个坑：`--wallpaper` 是【变量】，不是普通属性。
+      变量在 CSS 里是「按需继承」的：浏览器只在真正用到它的元素上
+      去解析。所以这里覆盖在 <html> 上的值，会被壁纸层
+      （DesktopLayout.astro 里那个 var(--wallpaper)）继承到，没问题。
+      但如果哪天壁纸层被挪进一个自己重新定义了 --wallpaper 的子树，
+      就会失效 —— 那时候要检查的是那个子树，不是这里。
+   ============================================================ */
+[data-wallpaper="aurora"] {
+  --wallpaper: url("/wallpapers/aurora.jpg") !important;
+}
+[data-wallpaper="aurora"].theme-dark {
+  --wallpaper: url("/wallpapers/aurora-dark.jpg") !important;
+}
+
+[data-wallpaper="mountains"] {
+  --wallpaper: url("/wallpapers/mountains.jpg") !important;
+}
+[data-wallpaper="mountains"].theme-dark {
+  --wallpaper: url("/wallpapers/mountains-dark.jpg") !important;
+}
+
+[data-wallpaper="abstract"] {
+  --wallpaper: url("/wallpapers/abstract.jpg") !important;
+}
+[data-wallpaper="abstract"].theme-dark {
+  --wallpaper: url("/wallpapers/abstract-dark.jpg") !important;
+}
+
+/*
+   ⚠️ default 这一档【必须显式写出来】，不能靠"不写就走 :root"。
+      因为 data-wallpaper="default" 这个属性是一直挂在 <html> 上的，
+      如果这里没有对应规则，用户从「极光」切回「默认」时，
+      极光的规则失效、回落到 :root / .theme-dark 的值 ——
+      这次碰巧结果是对的（:root 就是默认壁纸）。
+      但一旦 :root 的默认值改了（比如换成别的图），这里就错了。
+      显式写，保证语义自洽。
+*/
+[data-wallpaper="default"] {
+  --wallpaper: url("/wallpaper.jpg") !important;
+}
+[data-wallpaper="default"].theme-dark {
+  --wallpaper: url("/wallpaper-dark.jpg") !important;
+}
+
+/* ============================================================
+   壁纸兜底底色
+   ============================================================
+   背景图解码失败时，那一层不会画任何东西，直接露出 <body> 的白色 ——
+   桌面会变成一片刺眼的白，而且控制台不一定报错，很难查。
+
+   给壁纸层一个底色，图片正常时被完全盖住（看不见），
+   图片坏掉时至少是一片协调的深蓝，一眼就能看出"是壁纸没加载"
+   而不是"页面坏了"。
+
+   色值取自 Win10 默认壁纸的中间调。
+   ============================================================ */
+.bg-fallback {
+  background-color: #0d3a6b;
+}
+.theme-dark .bg-fallback {
+  background-color: #08111c;
+}
+
+/* ============================================================
    暗色主题
    ============================================================
    只覆盖变量，不碰任何组件。
@@ -166,6 +272,91 @@
 
   /* 暗色下标题栏用更亮的蓝，保证和暗背景有足够对比，边界看得清 */
   --titlebar-gradient: linear-gradient(180deg, #3a6ea5 0%, #2c5480 100%);
+}
+
+/* ============================================================
+   LaTeX 公式的暗色适配
+   ============================================================
+   ⚠️ 为什么需要这段？
+
+      KaTeX 自带的 CSS 里，公式的颜色是【写死的黑色】（.katex { color: #000 }），
+      它不知道页面有暗色模式。所以在暗色主题下，
+      黑色公式贴在深色背景上 = 基本看不见。
+
+      修法不是去改 KaTeX 的 CSS（那是 node_modules 里的，改了下一次装依赖就没了），
+      而是在我们自己的样式里【用变量接管颜色】。
+
+   ⚠️ 为什么用 currentColor 而不是直接设颜色值？
+
+      因为公式应该跟随它所在位置的文字颜色。
+      正文是 --fg，引用块里是别的颜色 —— 用 currentColor，
+      公式会自动匹配上下文，不用我们逐个场景去配。
+   ============================================================ */
+.katex {
+  color: currentColor;
+}
+
+/* 行间公式（$$...$$）：居中 + 留出上下间距，并且允许横向滚动 */
+.katex-display {
+  margin: 1em 0;
+  /* 超长公式在窄屏（尤其手机）上会溢出，给个横向滚动而不是撑破容器 */
+  overflow-x: auto;
+  overflow-y: hidden;
+  /* 给滚动条留点空间，避免滚动条紧贴公式 */
+  padding: 2px 0;
+}
+
+/* 公式里的换行提示不应影响行高 */
+.katex-display > .katex {
+  text-align: center;
+}
+
+/* ============================================================
+   ⚠️⚠️ KaTeX 无障碍副本的隐藏修正（必须放在 katex.css 之后）
+   ============================================================
+   症状：
+     公式渲染正常，但【右边跟着一串原始字符】，
+     像 "4Na+O2=2Na2O" 这样没排版的纯文本。
+
+   原因：
+     KaTeX 每个公式都输出【两份】内容：
+
+       <span class="katex">
+         <span class="katex-mathml">   ← ① MathML 版，给屏幕阅读器朗读
+         <span class="katex-html"      ← ② 视觉版，我们眼睛看到的
+              aria-hidden="true">
+
+     ① 本该被 CSS 裁到看不见，靠的是 katex.css 里这条：
+
+       .katex .katex-mathml { clip: rect(1px,1px,1px,1px); ... }
+
+     ⚠️ 但 lightningcss（Tailwind 4 / Astro 7 的 CSS 压缩器）
+        会把它"优化"成 clip-path: inset(50%)。
+
+        这是好心办坏事：clip 是绝对像素值，不管元素多高都裁得干净；
+        而 inset(50%) 是【按元素自身尺寸算百分比】，
+        MathML 实际高度远大于 1px 时，边缘内容就会漏出来 ——
+        漏出来的正是那串原始字符。
+
+   修法：
+     用 inset(100%) —— 四边各裁掉 100%，无论元素多高都归零。
+     同时保留 clip 作为老浏览器兜底。
+
+   ⚠️ 为什么不能直接改 katex.min.css？
+      那是 node_modules 里的文件，改了下一次 npm install 就没了。
+      覆盖必须写在我们自己的样式里。
+   ============================================================ */
+.katex .katex-mathml {
+  /* 老式写法，绝对像素裁剪，最可靠 */
+  clip: rect(0, 0, 0, 0);
+  /* clip: rect(...) 已被废弃，现代浏览器看这条。100% = 完全裁掉 */
+  clip-path: inset(100%);
+  border: 0;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  position: absolute;
+  overflow: hidden;
 }
 
 /* ============================================================
@@ -512,6 +703,61 @@ html.theme-transition * {
   overflow-wrap: break-word;
 }
 
+/* ============================================================
+   ⚠️⚠️ 重内容文章的渲染性能优化（公式多的文章必看）
+   ============================================================
+   症状：
+     公式很多的文章（比如 200+ 个 LaTeX 公式的化学手册），
+     在窗口里拖拽/缩放时明显卡顿，松手后还要等一两秒才跟上。
+
+   原因（实测数据，不是猜的）：
+     一篇 17KB 的 Markdown 含 210 个公式时，
+       渲染后 HTML        878,587 字符（膨胀 50 倍）
+       DOM 节点总数        24,544 个
+     每拉伸一次窗口，浏览器要给这 2.4 万个节点重算布局（reflow）。
+     这是【纯浏览器开销】，跟 React 一点关系都没有。
+
+   ── 关键取舍：两道防线，按代价从低到高 ──
+
+   防线 1：contain: layout style paint（下面这条）
+     告诉浏览器"这个元素的布局和外面互不影响"。
+     浏览器可以据此把重排【限制在元素内部】，
+     不会波及整页 —— 这是最便宜的一档，没有副作用。
+
+   防线 2：content-visibility: auto（更激进，但有代价）
+     让浏览器【完全跳过屏幕外内容的布局】。
+     省得更多，但有个致命副作用：
+       屏外元素的高度只是估值（contain-intrinsic-size），
+       scrollHeight 会算错 → 目录跳转、锚点定位、滚动条长度全部失准。
+     实测：一篇 2500px 高的文章，scrollHeight 只报 2293，
+           点目录只能滚 65px 就到底了，根本跳不到目标位置。
+
+   ⚠️⚠️ 所以最终【没有启用 content-visibility】。
+      原因就是它和"目录跳转 / 锚点定位"不兼容，
+      而后者是这个博客的核心功能之一。
+      只保留 contain —— 收益小一些，但没有任何功能损失。
+
+   ⚠️ contain: layout 的语义是"这个元素的内部布局不向外传播"，
+      浏览器可以据此把重排限制在元素内部。
+      ⚠️ 它【不改变元素的高度计算】—— 这正是它和 content-visibility
+      的关键区别，也是我们能用它的原因。
+   ============================================================ */
+
+/**
+ * ⚠️ 只给"内容重"的块级元素加 contain。
+ *
+ *   为什么不是每个 .md-body > * 都加？
+ *     段落（p）通常只有几十个字符，加与不加没区别，
+ *     反而给浏览器增加了一层"要不要建立独立格式化上下文"的判断成本。
+ *     真正会造成布局灾难的是【表格】—— 一个化学方程式表格
+ *     可能有几十行、上千个单元格，里面还嵌着公式。
+ *
+ *   所以只针对 table。这是精准打击，不是撒网。
+ */
+.md-body > table {
+  contain: layout style paint;
+}
+
 .md-body > *:first-child {
   margin-top: 0;
 }
@@ -802,3 +1048,242 @@ html.theme-transition * {
   font-size: 11.5px;
   color: var(--fg-faint);
 }
+
+/* ============================================================
+   开始菜单（Win10 两栏布局）
+   ============================================================
+   
+   ⚠️ 为什么这一堆样式要单独写在这里，而不是全用 Tailwind 类？
+   
+      因为开始菜单的配色有【两套来源】：
+   
+        平时      →  跟随主题（浅色主题浅色菜单，暗色主题深色菜单）
+        .menu-dark →  强制深色（不管主题是什么）
+   
+      用 Tailwind 写就得在每个元素上堆两个条件类，很快会失控。
+      用 CSS 变量把「颜色」抽出来，只在变量层做分支，
+      组件里永远只写 var(--menu-xxx)，干净得多。
+   ============================================================ */
+
+/* 开始菜单的默认配色 —— 跟随主题（浅色主题下是浅色菜单） */
+:root {
+  /* 左栏底色：比右栏略浅或略深，形成两栏的层次（截图里左栏偏浅） */
+  --menu-nav-bg: rgba(255, 255, 255, 0.16);
+  /* 列表项按下时的底色，比 hover 更重一档 */
+  --hover-invert-strong: rgba(255, 255, 255, 0.26);
+}
+
+.theme-dark {
+  --menu-nav-bg: rgba(255, 255, 255, 0.05);
+  --hover-invert-strong: rgba(255, 255, 255, 0.26);
+}
+
+/* ============================================================
+   强制深色开始菜单（.menu-dark）
+   ============================================================
+   
+   ⚠️⚠️ 选择器为什么是 .menu-dark .start-menu 而不是只写 .menu-dark？
+   
+      因为 .menu-dark 是打在 <html> 上的全局标记，
+      而我们要改的只是开始菜单这一个组件。
+      写成 .menu-dark 会把任务栏、窗口、桌面一起改掉。
+   
+      加一层 .start-menu（组件根元素上的类名）就限定了作用范围。
+   
+   ⚠️ 为什么用 !important？
+   
+      因为 .acrylic 类（也在组件根元素上）设置了 background，
+      而 Tailwind 的 .acrylic 是通过 @import 进来的，
+      在样式表中的位置和这里的规则顺序不固定。
+      不加 !important 的话，实际生效的可能是 .acrylic 那条，
+      表现就是"改了 .menu-dark 但没效果"。
+   ============================================================ */
+
+.menu-dark .start-menu {
+  /* 深色半透明底 —— 这就是 Win10 经典开始菜单的底色 */
+  background: rgba(30, 30, 30, 0.85) !important;
+  /* 深色下内容偏白 */
+  color: #ffffff;
+
+  /**
+   * ⚠️ 为什么先写 -webkit- 前缀，再写标准属性？
+   *
+   *    Tailwind 4 用的 lightningcss 在压缩时有个已知行为：
+   *    当同一条规则里【同时】出现带前缀和不带前缀的同一个属性时，
+   *    它会认为标准属性是多余的 —— 但如果它把【标准属性】删掉，
+   *    现代浏览器就只剩 -webkit- 版本可用（能用，但不优雅）；
+   *    更麻烦的是它有时保留标准、删掉前缀，那老 Safari/Chrome 就瞎了。
+   *
+   *    实测的做法是：把标准属性写在【后面】。这样即使被删的
+   *    是前缀版，标准版一定在；反过来也至少有标准版兜底。
+   *    这和项目里 .acrylic 的写法保持一致。
+   */
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  backdrop-filter: blur(20px) saturate(1.6);
+}
+
+/* 深色下左栏比右栏更暗一点，保持两栏的层次感 */
+.menu-dark .start-menu .start-menu-nav {
+  background: rgba(0, 0, 0, 0.22);
+}
+
+/* 深色下的分割线 / 边框：用低透明度白色而不是实色灰 */
+.menu-dark .start-menu [class*="border-"] {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* ============================================================
+   开始菜单滚动条
+   ============================================================
+   
+   ⚠️ 深色菜单里的滚动条必须是浅色的，否则深灰滑块压在
+      深灰背景上完全看不见 —— 用户会以为"内容到底了"，
+      其实下面还有磁贴。
+   ============================================================ */
+
+.menu-dark .start-menu::-webkit-scrollbar-thumb,
+.menu-dark .start-menu .startmenu-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.menu-dark .start-menu::-webkit-scrollbar-thumb:hover,
+.menu-dark .start-menu .startmenu-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.38);
+}
+
+/* ============================================================
+   文章目录（TOC）
+   ============================================================
+   就是 Hexo / 大多数博客右侧那种浮动目录：按层级缩进、
+   当前章节高亮、点击平滑跳转。
+
+   实现见 src/components/window/views/Toc.tsx。
+   这里只负责长相。
+   ============================================================ */
+
+.toc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.toc-item {
+  /* 重置 ul/li 的默认样式，改用 button 承担点击 */
+  margin: 0;
+  padding: 0;
+  line-height: 1.45;
+}
+
+.toc-item button {
+  display: block;
+  width: 100%;
+  padding: 3px 6px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--fg-dim);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+
+  /* ⚠️ 长标题必须截断。
+     目录栏只有 180px 宽，而像「1.1 钠及其化合物」这种标题
+     在化学/数学文章里能长达几十个字。
+     不截断的话，一条目录就能把整栏撑得没法用。 */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  transition: background-color 0.12s, color 0.12s;
+}
+
+.toc-item button:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+
+/* ── 层级缩进 ──
+   ⚠️ 缩进用 data-depth 属性算，不在 JSX 里写内联 style。
+      这样调缩进量只要改这一个数字，不用翻组件代码。
+      depth 从 2 开始（h2），所以减 2 —— h2 缩进 0，h3 缩进 10，h4 缩进 20。 */
+.toc-item[data-depth="2"] button {
+  padding-left: calc(6px + 0px);
+  color: var(--fg);
+  font-weight: 500;
+}
+.toc-item[data-depth="3"] button {
+  padding-left: calc(6px + 10px);
+  font-size: 11.5px;
+}
+.toc-item[data-depth="4"] button {
+  padding-left: calc(6px + 20px);
+  font-size: 11px;
+  color: var(--fg-faint);
+}
+
+/* ── 当前正在读的章节 ──
+   ⚠️ 用左侧色条 + 变色双重标记，而不是只变色。
+      只变色在深色模式下对比度不够，扫一眼看不出来读到哪了。 */
+.toc-item.is-active button {
+  background: var(--hover);
+  color: var(--accent);
+  font-weight: 600;
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+/* ============================================================
+   目录：深色模式
+   ============================================================ */
+.menu-dark .toc-item button,
+.theme-dark .toc-item button {
+  color: var(--fg-dim);
+}
+.theme-dark .toc-item[data-depth="2"] button {
+  color: var(--fg);
+}
+
+/* ============================================================
+   窗口层：让空白处的点击「穿透」到桌面
+   ============================================================
+
+   ── 问题现象
+      桌面上双击图标完全没反应。图标明明露在外面、也能聚焦，
+      但就是打不开窗口。
+
+   ── 原因
+      Astro 的 client:only / client:load 会给组件套一层
+      <astro-island> 标签。这一层【不在我的 JSX 里】，是框架加的。
+
+      它的尺寸不是 0（有内容时会被撑开），而且默认
+      pointer-events: auto —— 于是它成了一块盖在桌面上的透明玻璃，
+      把落在它范围内的所有鼠标事件都吃掉了。
+
+   ── 为什么不能只在 index.astro 里改
+      那一层是 Astro 自己插进来的，我控制不到它的 class。
+      但它有固定的标签名 <astro-island>，所以用 CSS 选中它最直接。
+
+   ── 为什么用 display: contents 而不是 pointer-events: none
+      display: contents 会让这个盒子【本身不生成盒子】，
+      它的子元素直接提升到父级参与布局。
+      好处是连"零尺寸但仍是层叠上下文"这种边角情况都没有了 ——
+      它等于从布局里消失，事件自然也不会被它截。
+
+      ⚠️ 但它有个已知坑：会让元素自身的定位/尺寸失效。
+      astro-island 本来就是纯包装标签、不承担任何样式职责，
+      所以这里用 contents 是安全的。
+
+      （另一个选择是 pointer-events: none，但那要求所有后代
+        自己也写回 auto —— 而窗口本体已经在 Window.tsx 里写了，
+        两条路都能走通，contents 更彻底。）
+
+   ── 谁负责"把点击收回来"
+      Window.tsx 里 Rnd 节点上的 pointerEvents: "auto"。
+      两者是配套的，改一个必须改另一个。
+   ============================================================ */
+#os-window-layer astro-island {
+  display: contents;
+}
+

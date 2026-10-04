@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { Rnd } from "react-rnd";
 import { motion } from "motion/react";
 import { useWindowStore, type WinState } from "../../store/windowStore";
@@ -16,6 +17,17 @@ const TASKBAR_H = 40;
  * 所以提成常量，改的时候只改这一行。
  */
 const TITLEBAR_H = 32;
+
+/**
+ * 「内容很重」的判定阈值 —— 渲染后的 DOM 节点数。
+ *
+ * 实测参考（化学手册那篇）：
+ *   17,518 字符 Markdown → 878,587 字符 HTML → 24,544 个节点
+ *
+ * 5000 是"开始能感觉到缩放卡顿"的经验线。
+ * 低于它的窗口拖起来本来就流畅，加冻结反而只多了一次闪烁。
+ */
+const FREEZE_NODE_THRESHOLD = 5000;
 
 /**
  * 窗口开关动画的曲线与时长。
@@ -84,6 +96,81 @@ function WinIcon({ icon, className = "" }: { icon: string; className?: string })
 export default function Window({ win, children }: { win: WinState; children?: React.ReactNode }) {
   const isMobile = useIsMobile();
   const { close, toggleMinimize, toggleMaximize, move, resize, focus } = useWindowStore();
+
+  /**
+   * 缩放期冻结状态 —— 见下方 Rnd 的 onResizeStart 注释。
+   * 只在"内容很重"的窗口上会被置为 true。
+   */
+  const [freezing, setFreezing] = useState(false);
+
+  /**
+   * 这个窗口的内容是不是"重"到需要缩放时冻结？
+   *
+   * ⚠️ 判断依据是【渲染后的 DOM 节点数】，不是源文件大小。
+   *
+   *    实测换算：化学手册那篇 17,518 字符 Markdown
+   *             → 878,587 字符 HTML（膨胀 50 倍）
+   *             → 24,544 个 DOM 节点
+   *
+   *    5000 节点是"开始能感觉到卡"的经验阈值。
+   *    低于它的文章拖起来本来就流畅，冻结反而会引入不必要的闪烁。
+   *
+   * ⚠️ 为什么用 useEffect + state 而不是 useMemo？
+   *    必须在 DOM 渲染【之后】才能量到真实节点数。
+   *    useMemo 在 render 阶段跑，那时 DOM 还没更新。
+   *
+   * ⚠️⚠️ 为什么依赖数组里是 win.title，而不是 children？
+   *
+   *    children 是 ReactNode，React 没法可靠地比较它 ——
+   *    每次父组件重渲染都会生成新的 ReactNode，写进去等于"每次都重测"，
+   *    而我们只在下一帧测一次节点数，会白跑很多次。
+   *
+   *    win.title 是个字符串，稳定、可比，而且它正好随文章变化
+   *    （打开新文章 → 标题变 → 触发重测）。这就是我们要的触发点。
+   *
+   * ⚠️ 为什么用 requestAnimationFrame 而不是直接量？
+   *    useEffect 跑在 DOM 提交【之后】，理论上能直接量到。
+   *    但记事本/文章视图是懒渲染的（renderMarkdown 可能在 effect 里跑），
+   *    推到下一帧更稳，代价是 16ms 延迟 —— 用户感知不到。
+   */
+  const [shouldFreeze, setShouldFreeze] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const measure = () => {
+      const body = rootRef.current?.querySelector(".md-body");
+      if (!body) {
+        setShouldFreeze(false);
+        return;
+      }
+      setShouldFreeze(body.querySelectorAll("*").length > FREEZE_NODE_THRESHOLD);
+    };
+
+    /**
+     * 测两次，而不是一次。
+     *
+     * ⚠️ 为什么要测两次？
+     *   第一帧（rAF）通常够用了 —— DOM 已经提交。
+     *   但有两类窗口会在【之后】才把正文填进去：
+     *
+     *     1. 记事本的「渲染视图」：html 是 useMemo 算的，
+     *        但用户可能先看到源码视图，再按 F9 切过去；
+     *     2. 任何"内容异步就绪"的视图。
+     *
+     *   只测一次的话，这些窗口的 shouldFreeze 永远是 false，
+     *   缩放时还是会卡 —— 而且不报错，属于静默失效。
+     *
+     *   补测一次（延迟 600ms）几乎零成本，却能兜住这类情况。
+     *   ⚠️ 不再加更多次：再加下去就是轮询了，
+     *      而窗口内容在一次渲染后就稳定了，没必要持续观察。
+     */
+    const raf = requestAnimationFrame(measure);
+    const timer = window.setTimeout(measure, 600);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(timer);
+    };
+  }, [win.title]);
 
   /**
    * 动画开关。
@@ -229,10 +316,30 @@ export default function Window({ win, children }: { win: WinState; children?: Re
          这样写对 Rnd 的 display 值没有任何要求，它想改成什么都行。
     */
     <div
+      ref={rootRef}
       className="win-body-wrap relative overflow-hidden"
       style={{ height: `calc(100% - ${TITLEBAR_H}px)` }}
     >
-      <div className="win-body h-full overflow-auto bg-[var(--surface)] text-[13px] leading-relaxed text-[var(--fg)]">
+      <div
+        className="win-body h-full overflow-auto bg-[var(--surface)] text-[13px] leading-relaxed text-[var(--fg)]"
+        /**
+         * ⚠️⚠️ 缩放冻结的落点就在这里。
+         *
+         *   冻结期间给正文盖一层隐身（visibility: hidden），
+         *   浏览器就跳过这 2.4 万个节点的重排，缩放瞬间顺滑。
+         *
+         *   ⚠️ 为什么加在 .win-body 上而不是整窗口？
+         *     标题栏上有三个按钮，冻结整窗口会让按钮也消失 ——
+         *     用户会以为窗口坏了。只冻结正文区，标题栏照常显示。
+         *
+         *   ⚠️ 为什么用 style 而不是 className？
+         *     这是个二态开关，切换频率高（每次缩放两次）。
+         *     加 class 会走 Tailwind 的类名拼接 + CSS 匹配；
+         *     直接写行内 style 是改一个属性，更直接，
+         *     而且行内样式优先级最高，不会被 .win-body 的其它规则盖掉。
+         */
+        style={freezing ? { visibility: "hidden" } : undefined}
+      >
         {children !== undefined && children !== null ? (
           /*
             ⚠️ 这层 padding 容器必须自己也带 h-full。
@@ -321,10 +428,25 @@ export default function Window({ win, children }: { win: WinState; children?: Re
       /**
        * transform-origin 定在窗口中心：Win10 的窗口就是从中心「长出来」的。
        * 如果默认用左上角，视觉上会像从角落"甩"出来，很怪。
+       *
+       * ⚠️⚠️ pointerEvents: "none" 是【必须】的，删了会出大问题。
+       *
+       *    这层 motion.div 是 absolute inset-0，也就是【铺满整个视口】。
+       *    它本身是透明的、看不见的，但【看得见 ≠ 能点】：
+       *    一个透明的 div 依然会拦截鼠标事件。
+       *
+       *    症状：桌面上双击图标完全没反应（图标明明就露在外面）。
+       *    用 devtools 点一下会选中这个 div —— 事件被它吃掉了。
+       *
+       *    修法是"穿透"：外两层铺满视口的容器都设 pointer-events: none，
+       *    只有真正有面积的窗口本体（Rnd 节点）恢复成 auto。
+       *    这样空白处的点击会穿过窗口层，落到下面的桌面图标上。
        */
       style={{ transformOrigin: "center center", zIndex: win.z, pointerEvents: "none" }}
     >
-      <div className="h-full w-full" style={{ pointerEvents: "auto" }}>
+      {/* 二层容器同样是铺满视口的，所以同样要穿透。
+          它的作用只是给 Rnd 提供一个"有确定尺寸的父节点"（bounds="parent" 需要）。 */}
+      <div className="h-full w-full" style={{ pointerEvents: "none" }}>
         <Rnd
           // key 里带 maximized，切换时让 Rnd 用新几何重新挂载，避免内部状态残留
           key={`${win.id}-${win.maximized}`}
@@ -343,11 +465,75 @@ export default function Window({ win, children }: { win: WinState; children?: Re
           onMouseDown={() => focus(win.id)}
           onDragStart={() => focus(win.id)}
           onDragStop={(_e, d) => move(win.id, d.x, d.y)}
-          onResizeStop={(_e, _dir, ref, _delta, pos) =>
-            resize(win.id, pos.x, pos.y, ref.offsetWidth, ref.offsetHeight)
-          }
+          /**
+           * ⚠️⚠️ 缩放期的性能开关 —— 这是解决"公式多的文章拖起来卡"的关键。
+           *
+           *   症状：200+ 公式的文章（2.4 万个 DOM 节点），
+           *        在窗口里拖拽缩放时明显卡顿，松手后还要等一两秒才跟上。
+           *
+           *   原因：缩放时容器宽度每一帧都在变，
+           *        浏览器必须给全部 2.4 万个节点重算换行和位置。
+           *        一帧算不完 → 掉帧 → 手感发黏。
+           *
+           *   解法：缩放【过程中】把正文藏起来（visibility: hidden）。
+           *        浏览器跳过不可见元素的布局计算，缩放瞬间变流畅。
+           *        松手后立刻恢复显示，并重新算一次布局。
+           *
+           *   ⚠️ 为什么用 visibility: hidden 而不是 display: none？
+           *      display: none 会把元素从渲染树里摘掉，
+           *      恢复时要【从头】重建布局（更慢，而且会丢失滚动位置）。
+           *      visibility: hidden 只是不画，盒子还在，
+           *      恢复时几乎零成本 —— 滚动位置也不会丢。
+           *
+           *   ⚠️ 为什么不是 opacity: 0？
+           *      opacity: 0 的元素仍然要参与布局和绘制（只是透明），
+           *      省不掉我们想省的那部分开销。visibility 才会真正跳过绘制。
+           *
+           *   ⚠️ 那用户会不会看到"内容闪一下消失"？
+           *     只有内容【渲染很重】的文章才开这个开关（见上面的 shouldFreeze）。
+           *     普通文章节点少，一秒能算几十帧，根本不需要冻结 ——
+           *     开关本身反而会造成不必要的闪烁。
+           *     判定标准是【渲染后的 DOM 节点数 > FREEZE_NODE_THRESHOLD(5000)】。
+           *
+           *   ⚠️ 为什么用节点数，而不是"正文长度 > N 字符"这种拍脑袋的估计？
+           *     因为 Markdown 渲染成 HTML 的膨胀率是【不固定】的：
+           *       化学手册：17,518 字符 → 878,587 字符 HTML（50 倍）
+           *       纯文字文章膨胀率可能只有 3~5 倍
+           *     用字符数估会把"公式多的小文章"漏掉、把"纯文字长文"误伤。
+           *     直接量渲染后的真实节点数，是唯一准确的判据。
+           */
+          onResizeStart={() => {
+            if (shouldFreeze) setFreezing(true);
+          }}
+          onResizeStop={(_e, _dir, ref, _delta, pos) => {
+            // ⚠️ 先解除冻结，再写入新几何 —— 顺序不能反。
+            //    如果先 resize 再解冻，中间那一帧会用旧尺寸布局一次，闪得更明显。
+            setFreezing(false);
+            resize(win.id, pos.x, pos.y, ref.offsetWidth, ref.offsetHeight);
+          }}
           className="flex flex-col overflow-hidden rounded-t-[6px] bg-[var(--surface)]
                      shadow-[0_10px_36px_rgba(0,0,0,.45)]"
+          /**
+           * ⚠️ 这里是「穿透链」的终点：窗口本体必须把事件收回来。
+           *
+           *    上面两层铺满视口的容器都设了 pointer-events: none，
+           *    如果不在这里恢复成 auto，整个窗口会变得「点不动」——
+           *    标题栏拖不了、按钮按不动、正文选不中文字。
+           *
+           *    ⚠️ 为什么用 style 而不是加个 class？
+           *      react-rnd 会往这个节点上写行内 style（position/width/height/
+           *      transform/display…）。如果我加个 class 想设 pointer-events，
+           *      只要 react-rnd 哪天也在行内写了 pointer-events，
+           *      行内优先级更高就会把 class 盖掉。
+           *      索性也用行内写，跟它站在同一优先级上，谁是最后写的谁生效 ——
+           *      而我们在 JSX 里的 style 属性是 react-rnd 合并之后的结果，
+           *      这里没有别的来源写它，所以稳定。
+           *
+           *    auto 的语义：恢复默认值，也就是「能接收事件」。
+           *    不是 inheriting —— pointer-events 恰恰是【会继承】的属性，
+           *    父级 none 会让子级默认也 none，所以必须显式写回 auto。
+           */
+          style={{ pointerEvents: "auto" }}
           resizeHandleClasses={{
             top: "rnd-handle",
             bottom: "rnd-handle",

@@ -35,9 +35,19 @@ const stats = await getStats();
       ⚠️ 关键：client:load / client:only 会给组件套一层 <astro-island> 标签，
       而那层标签的实际尺寸是 0×0。如果 bounds 直接指向它，
       react-rnd 会把拖拽范围算成 0×0，窗口一拖就被钳回原点。
-      所以这里用 client:only + 一个自己控制的满屏容器来当 bounds 目标。 */}
-  <main class="absolute inset-0" id="os-window-layer">
-    <div class="absolute inset-0">
+      所以这里用 client:only + 一个自己控制的满屏容器来当 bounds 目标。
+
+      ⚠️⚠️ pointer-events: none 是必须的，别删。
+      这两层都是 absolute inset-0（铺满视口）的透明盒子。
+      透明不等于"点不到"——它们会拦下所有落在桌面上的鼠标事件，
+      导致双击桌面图标毫无反应。所以：
+
+        这两层       → pointer-events: none（让点击穿过去）
+        窗口本体     → 在 Window.tsx 里显式写回 auto（把点击收回来）
+
+      这样「窗口盖住的地方归窗口，空白处归桌面」才是对的。 */}
+  <main class="pointer-events-none absolute inset-0" id="os-window-layer">
+    <div class="pointer-events-none absolute inset-0">
       <WindowManager
         client:only="react"
         posts={posts}

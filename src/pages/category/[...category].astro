@@ -1,0 +1,182 @@
+---
+import ContentLayout from "../../layouts/ContentLayout.astro";
+import PostCard from "../../components/article/PostCard.astro";
+import {
+  getCategories,
+  getTopCategories,
+  getPostsByCategoryPath,
+} from "../../lib/posts";
+import { toClientPost } from "../../lib/markdown";
+
+/**
+ * 分类页（支持多级分类）。
+ * ================================================================
+ *
+ * ⚠️⚠️ 文件名为什么是 [...category].astro 而不是 [category].astro？
+ *
+ *    [category]   是【单段】动态路由，只匹配 /category/前端，
+ *                 遇到 /category/前端/Astro 会 404。
+ *
+ *    [...category]是【rest】动态路由，能吞任意多段，
+ *                 匹配到的值是一个数组 ["前端", "Astro"]。
+ *
+ *    我们的 category 支持用斜杠表达层级（"前端/Astro"），
+ *    生成的 URL 天然带斜杠，所以必须用 rest 版本。
+ *
+ *    这个改动是"文件夹嵌套"这个需求的必经之路 ——
+ *    不改的话，此电脑里点开「前端/Astro」文件夹里的文章，
+ *    分类链接会指向一个不存在的页面。
+ *
+ * ── 关于匹配策略 ──
+ *
+ *    /category/前端          → 前缀匹配，看到「前端」这个大类的所有文章
+ *    /category/前端/Astro    → 前缀匹配，看到 Astro 子类及其更深层的文章
+ *
+ *    统一用前缀匹配（prefix = true）而不是"根层严格、深层前缀"，
+ *    是因为：点开任意一层分类，用户的期待都是"看这个分类下的东西"，
+ *    而子分类显然属于父分类。这也是 WordPress / Hexo 的通用行为。
+ */
+
+export async function getStaticPaths() {
+  /**
+   * ⚠️ 这里要生成【两批】路径：
+   *
+   *    1. 完整分类路径（"前端/Astro"）→ /category/前端/Astro
+   *    2. 各级父路径（"前端"）        → /category/前端
+   *
+   *    只生成第一批的话，点面包屑上的「前端」会 404 ——
+   *    因为没有任何一篇文章的 category 恰好等于 "前端"，
+   *    它只作为路径中间段存在。
+   *
+   *    所以要主动把每一级的父路径都补出来。
+   */
+  const categories = await getCategories();
+
+  // 用 Set 收集所有需要生成的路径（含各级父路径）
+  const paths = new Set<string>();
+  for (const c of categories) {
+    const segs = c.name.split("/").filter(Boolean);
+    let acc = "";
+    for (const s of segs) {
+      acc = acc ? `${acc}/${s}` : s;
+      paths.add(acc);
+    }
+  }
+
+  return await Promise.all(
+    [...paths].map(async (path) => ({
+      /**
+       * ⚠️⚠️ params 的值必须是【字符串】，不能拆成数组。
+       *
+       *    我一开始想当然地写成 path.split("/")（数组），
+       *    结果 Astro 直接报错：
+       *      Invalid getStaticPaths() route parameter for `category`.
+       *      Expected a string or undefined, received `object`
+       *
+       *    原因：rest 路由（[...slug]）在 Astro 里接收的是
+       *    【一个字符串】，斜杠本身就是它的一部分。
+       *    Astro 内部负责把 /category/前端/Astro 切开映射到
+       *    这个参数上 —— 那不是我们要做的事。
+       *
+       *    直接给 "前端/Astro"，生成的 URL 就是
+       *    /category/前端/Astro，正好是我们想要的。
+       */
+      params: { category: path },
+      props: {
+        path,
+        // 取最后一段当显示名（"前端/Astro" → "Astro"）
+        name: path.split("/").pop() ?? path,
+        posts: await getPostsByCategoryPath(path, true),
+      },
+    })),
+  );
+}
+
+const { path, name, posts } = Astro.props;
+const cards = posts.map(toClientPost);
+
+const topCategories = await getTopCategories();
+const allCategories = await getCategories();
+
+/** 面包屑：把 "前端/Astro" 拆成可点击的逐级链接 */
+const segs = path.split("/").filter(Boolean);
+const crumbs = segs.map((s, i) => ({
+  label: s,
+  href: `/category/${segs.slice(0, i + 1).join("/")}`,
+}));
+
+/** 当前分类下的子分类（"前端/Astro" 下面还有 "前端/Astro/SSR" 之类） */
+const childCategories = allCategories.filter((c) =>
+  c.name.startsWith(`${path}/`),
+);
+---
+
+<ContentLayout
+  title={`分类：${name}`}
+  description={`分类「${path}」下有 ${posts.length} 篇文章。`}
+  canonical={`/category/${path}`}
+>
+  <div class="mb-6">
+    <a href="/tags" class="text-[12.5px] text-[var(--fg-faint)] no-underline hover:text-[var(--accent)]">
+      ← 全部分类
+    </a>
+
+    <!-- 面包屑：逐级可点 -->
+    <nav class="mt-3 flex flex-wrap items-center gap-1 text-[12px] text-[var(--fg-faint)]">
+      <a href="/category" class="no-underline hover:text-[var(--accent)]">全部分类</a>
+      {
+        crumbs.map((c) => (
+          <>
+            <span class="opacity-50">›</span>
+            <a href={c.href} class="no-underline hover:text-[var(--accent)]">
+              {c.label}
+            </a>
+          </>
+        ))
+      }
+    </nav>
+
+    <h1 class="mt-2 mb-0 text-[24px] font-semibold text-[var(--fg)]">
+      📂 {name}
+    </h1>
+    <p class="mt-2 text-[13px] text-[var(--fg-dim)]">{posts.length} 篇文章</p>
+  </div>
+
+  <!-- 子分类：只有存在时才有这一块 -->
+  {
+    childCategories.length > 0 && (
+      <section class="mb-8">
+        <p class="mb-2 text-[12px] font-medium uppercase tracking-wide text-[var(--fg-faint)]">
+          子分类
+        </p>
+        <div class="flex flex-wrap gap-1.5">
+          {childCategories.map((c) => (
+            <a href={`/category/${c.name}`} class="md-chip">
+              📁 {c.name.split("/").pop()}{" "}
+              <span class="ml-1 opacity-60">{c.count}</span>
+            </a>
+          ))}
+        </div>
+      </section>
+    )
+  }
+
+  <div class="flex flex-col gap-3">
+    {cards.map((p) => <PostCard post={p} />)}
+  </div>
+
+  <nav class="mt-10 border-t border-[var(--surface-border)] pt-5">
+    <p class="mb-2 text-[12px] text-[var(--fg-faint)]">顶层分类</p>
+    <div class="flex flex-wrap gap-1.5">
+      {
+        topCategories
+          .filter((c) => c.name !== segs[0])
+          .map((c) => (
+            <a href={`/category/${c.name}`} class="md-chip">
+              📂 {c.name} <span class="ml-1 opacity-60">{c.count}</span>
+            </a>
+          ))
+      }
+    </div>
+  </nav>
+</ContentLayout>

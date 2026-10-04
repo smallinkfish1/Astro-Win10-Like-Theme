@@ -1,5 +1,6 @@
 ---
 import ContentLayout from "../layouts/ContentLayout.astro";
+import { SETTINGS_SECTIONS } from "../lib/settings-sections";
 
 /**
  * 控制面板静态页（对应 /settings）。
@@ -16,12 +17,18 @@ import ContentLayout from "../layouts/ContentLayout.astro";
  *    真正能操作的控制面板在桌面上的「控制面板」图标里。
  *    这正是「静态页 + 窗口化」这套架构的一贯做法 ——
  *    静态页保证可访问和可分享，交互功能交给桌面。
+ *
+ * ⚠️ 为什么还要单独做一个 /settings/<分类> 的页面？
+ *    因为用户可以在窗口里点左侧导航，URL 会变成 /settings/appearance。
+ *    那个 URL 必须真的能打开（可刷新、可收藏、可分享）。
+ *    见 src/pages/settings/[...section].astro。
+ *    Astro 的动态路由匹配不到裸的 /settings，所以本文件必须保留。
  */
 ---
 
 <ContentLayout
   title="控制面板"
-  description="调整博客桌面的外观：暗色模式、毛玻璃效果、界面动画。"
+  description="调整博客桌面的外观：壁纸、亮色/暗色模式、毛玻璃效果、界面动画。"
   canonical="/settings"
 >
   <div class="mb-6">
@@ -34,7 +41,8 @@ import ContentLayout from "../layouts/ContentLayout.astro";
   <div class="mb-8 rounded border border-[var(--surface-border)] bg-[var(--surface)] p-5">
     <p class="m-0 text-[13.5px] leading-relaxed text-[var(--fg-dim)]">
       外观设置在<strong>桌面上的「控制面板」窗口</strong>里操作，
-      可以切换暗色模式、开关毛玻璃效果和界面动画。
+      可以换壁纸、切换亮色/暗色模式、开关毛玻璃效果和界面动画。
+      窗口左侧有分类导航，点哪一类右侧就切换哪一类 —— 全程在同一个窗口内，不会弹新窗口。
     </p>
     <p class="mt-3 text-[12.5px] leading-relaxed text-[var(--fg-dim)]">
       设置保存在浏览器本地（localStorage），换设备不会同步。
@@ -50,6 +58,38 @@ import ContentLayout from "../layouts/ContentLayout.astro";
 
   <section class="mb-8">
     <h2 class="mb-4 border-b border-[var(--surface-border)] pb-2 text-[16px] font-semibold text-[var(--fg)]">
+      分类
+    </h2>
+
+    <div class="grid gap-3 sm:grid-cols-2">
+      {
+        SETTINGS_SECTIONS.map((item) => (
+          <a
+            href={`/settings/${item.id}`}
+            class="flex items-start gap-3 rounded border border-[var(--surface-border)] bg-[var(--surface)] px-4 py-3.5 no-underline transition-colors hover:border-[var(--accent)]"
+          >
+            <span class="text-[18px] leading-none">{item.icon}</span>
+            <span class="min-w-0 flex-1">
+              <span class="flex items-center gap-2 text-[13.5px] font-medium text-[var(--fg)]">
+                {item.name}
+                {!item.ready && (
+                  <span class="rounded bg-[var(--surface-3)] px-1.5 py-0.5 text-[10px] font-normal text-[var(--fg-faint)]">
+                    开发中
+                  </span>
+                )}
+              </span>
+              <span class="mt-1 block text-[12.5px] leading-relaxed text-[var(--fg-dim)]">
+                {item.desc}
+              </span>
+            </span>
+          </a>
+        ))
+      }
+    </div>
+  </section>
+
+  <section class="mb-8">
+    <h2 class="mb-4 border-b border-[var(--surface-border)] pb-2 text-[16px] font-semibold text-[var(--fg)]">
       可调整的项目
     </h2>
 
@@ -57,9 +97,14 @@ import ContentLayout from "../layouts/ContentLayout.astro";
       {
         [
           {
+            icon: "🖼️",
+            title: "壁纸",
+            desc: "在几张预设壁纸之间切换。每张壁纸都有亮色和暗色两个版本，会跟着主题自动选用对应的一张。",
+          },
+          {
             icon: "🌙",
-            title: "暗色模式",
-            desc: "整个桌面、窗口、开始菜单切换为暗色配色。首次访问会自动跟随系统偏好。",
+            title: "亮色 / 暗色模式",
+            desc: "整个桌面、窗口、开始菜单切换配色。首次访问会自动跟随系统偏好。",
           },
           {
             icon: "🪟",
@@ -70,6 +115,11 @@ import ContentLayout from "../layouts/ContentLayout.astro";
             icon: "✨",
             title: "界面动画",
             desc: "窗口缩放、开始菜单滑入、磁贴悬停等动效。关闭后所有过渡立即完成。",
+          },
+          {
+            icon: "🌑",
+            title: "开始菜单深色",
+            desc: "只把开始菜单压成深色亚克力，不影响任务栏和窗口 —— Win10 最经典的那个观感。",
           },
         ].map((item) => (
           <div class="flex items-start gap-3.5 rounded border border-[var(--surface-border)] bg-[var(--surface)] px-4 py-3.5">
@@ -90,24 +140,27 @@ import ContentLayout from "../layouts/ContentLayout.astro";
     </h2>
     <div class="md-body">
       <p>
-        外观设置全部由 <strong>CSS 变量</strong> 驱动：颜色、材质、动画时长
-        都定义在 <code>:root</code> 里，暗色模式只做一件事 ——
+        外观设置全部由 <strong>CSS 变量</strong> 驱动：颜色、材质、动画时长、壁纸地址
+        都定义在 <code>:root</code> 里。切换设置时只做一件事 ——
         覆盖这些变量的值，不碰任何组件代码。
       </p>
 
-      <p>三个开关对应 <code>&lt;html&gt;</code> 上的三个类：</p>
+      <p>
+        其中四个「开关」对应 <code>&lt;html&gt;</code> 上的类，
+        而壁纸用的是<strong>属性</strong>：
+      </p>
 
       <table>
         <thead>
           <tr>
-            <th>开关</th>
-            <th>类名</th>
+            <th>设置</th>
             <th>作用方式</th>
+            <th>说明</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td>暗色模式</td>
+            <td>亮色 / 暗色</td>
             <td><code>.theme-dark</code></td>
             <td>覆盖 :root 里的颜色变量</td>
           </tr>
@@ -121,11 +174,25 @@ import ContentLayout from "../layouts/ContentLayout.astro";
             <td><code>.no-anim</code></td>
             <td>把所有动画时长压成 0.01ms</td>
           </tr>
+          <tr>
+            <td>开始菜单深色</td>
+            <td><code>.menu-dark</code></td>
+            <td>只作用于开始菜单，不影响别处</td>
+          </tr>
+          <tr>
+            <td>壁纸</td>
+            <td><code>data-wallpaper="…"</code></td>
+            <td>
+              用属性而非类，因为它是「多选一」和「亮/暗」两个维度的组合 ——
+              一位说"哪张"，<code>.theme-dark</code> 说"亮还是暗"，
+              两者正交，CSS 规则数是线性增长。
+            </td>
+          </tr>
         </tbody>
       </table>
 
       <blockquote>
-        主题类由一段内联在 <code>&lt;head&gt;</code> 的同步脚本在首帧之前打上，
+        这些类 / 属性由一段内联在 <code>&lt;head&gt;</code> 的同步脚本在首帧之前打上，
         所以暗色模式用户不会看到刷新时的"闪白"。
       </blockquote>
     </div>

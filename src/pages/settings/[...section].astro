@@ -1,0 +1,179 @@
+---
+import ContentLayout from "../../layouts/ContentLayout.astro";
+import {
+  SETTINGS_SECTIONS,
+  findSection,
+} from "../../lib/settings-sections";
+
+/**
+ * 控制面板分类的静态页：/settings/appearance、/settings/about、
+ * /settings/language、/settings/changelog
+ *
+ * ── 为什么需要这些页面？ ──
+ *
+ *   有两类访问者：
+ *
+ *   1. 站内用户 —— 在桌面上的控制面板窗口里点左侧导航，
+ *      URL 会变成 /settings/appearance。这是【可刷新、可收藏、
+ *      可分享】的，所以这个 URL 必须真的能打开一个页面。
+ *
+ *   2. 搜索引擎 / 新标签页直接访问 —— 它们不走 React 岛屿，
+ *      拿到的就是这份静态 HTML。
+ *
+ *   如果只有窗口、没有静态页，第 1 类用户一刷新就 404，
+ *   第 2 类用户看到的是空白。这和"每篇文章都有独立静态路由"
+ *   是同一个原则：**URL 承诺了的东西必须真的存在。**
+ *
+ * ── ⚠️ 为什么还要保留 src/pages/settings.astro？ ──
+ *
+ *   Astro 的动态路由 [...section] 只能匹配【至少一段】的路径，
+ *   匹配不到裸的 /settings（没有 section 那一段）。
+ *   所以需要一个独立的 settings.astro 来接管裸路径。
+ *   两个文件并存不是冗余，是 Aster 路由规则的限制所致。
+ *
+ * ── 这一页做什么？ ──
+ *
+ *   和 settings.astro 一样，它【不做真正的设置】——
+ *   设置状态挂在 <html> 上，由桌面里的 React 岛屿管。
+ *   这里的作用是"说明 + 入口"：告诉用户这个分类是干什么的，
+ *   以及怎么回到桌面去改。
+ *
+ *   这正是本项目的架构约定：静态页保可访问性，交互交给桌面。
+ */
+
+/**
+ * ⚠️ getStaticPaths 直接由 SETTINGS_SECTIONS 生成，不手写列表。
+ *    手写的后果：以后往清单里加一个分类，忘了同步这里，
+ *    于是新分类的 URL 在窗口里能点到、一刷新就 404。
+ *    这类"两处数据不同步"的 bug 全部靠单一数据源消灭。
+ */
+export function getStaticPaths() {
+  return SETTINGS_SECTIONS.map((s) => ({ params: { section: s.id } }));
+}
+
+const { section } = Astro.params;
+const s = findSection(section);
+---
+
+<ContentLayout
+  title={`控制面板 · ${s.name}`}
+  description={s.desc}
+  canonical={`/settings/${s.id}`}
+>
+  <div class="mb-6">
+    <nav class="mb-3 text-[12px] text-[var(--fg-faint)]">
+      <a href="/settings" class="no-underline hover:text-[var(--accent)]">控制面板</a>
+      <span class="mx-1.5">›</span>
+      <span>{s.name}</span>
+    </nav>
+    <h1 class="m-0 text-[24px] font-semibold text-[var(--fg)]">
+      {s.icon} {s.name}
+    </h1>
+    <p class="mt-2 text-[13px] text-[var(--fg-dim)]">{s.desc}</p>
+  </div>
+
+  {
+    s.ready ? (
+      <div class="mb-8 rounded border border-[var(--surface-border)] bg-[var(--surface)] p-5">
+        <p class="m-0 text-[13.5px] leading-relaxed text-[var(--fg-dim)]">
+          「{s.name}」的设置项在<strong>桌面上的「控制面板」窗口</strong>里操作，
+          改完立刻生效，并保存在浏览器本地。
+        </p>
+        <p class="mt-3 text-[12.5px] leading-relaxed text-[var(--fg-dim)]">
+          这一页是它的静态版本，用于让这个地址可以被直接访问和分享 ——
+          搜索引擎和社交平台抓到这里，看到一个完整的说明页，
+          而不是一片空白。真正的交互界面需要 JavaScript，在桌面上。
+        </p>
+        <div class="mt-4 flex flex-wrap gap-2">
+          <a
+            href="/"
+            class="inline-flex items-center gap-1.5 rounded bg-[var(--accent)] px-3.5 py-2 text-[12.5px] text-white no-underline transition-colors hover:bg-[var(--accent-hover)]"
+          >
+            ← 回到桌面
+          </a>
+          <a
+            href="/settings"
+            class="inline-flex items-center gap-1.5 rounded border border-[var(--surface-border)] px-3.5 py-2 text-[12.5px] text-[var(--fg-dim)] no-underline transition-colors hover:bg-[var(--hover)]"
+          >
+            控制面板总览
+          </a>
+        </div>
+      </div>
+
+      <section class="mb-8">
+        <h2 class="mb-4 border-b border-[var(--surface-border)] pb-2 text-[16px] font-semibold text-[var(--fg)]">
+          打开方式
+        </h2>
+        <ol class="m-0 list-decimal space-y-2 pl-5 text-[13px] leading-relaxed text-[var(--fg-dim)]">
+          <li>回到桌面（上面的按钮，或直接点浏览器后退）。</li>
+          <li>
+            双击桌面上的<strong>「控制面板」</strong>图标。
+          </li>
+          <li>
+            在左侧分类里选「{s.name}」—— 右侧会显示对应的设置项，
+            全程在同一个窗口内切换，不会弹出新窗口。
+          </li>
+        </ol>
+      </section>
+    ) : (
+      <div class="mb-8 rounded border border-[var(--surface-border)] bg-[var(--surface)] p-8 text-center">
+        <div class="text-[34px] leading-none opacity-40">{s.icon}</div>
+        <div class="mt-4 text-[15px] text-[var(--fg)]">功能开发中…</div>
+        <p class="mx-auto mt-3 max-w-[380px] text-[12.5px] leading-relaxed text-[var(--fg-dim)]">
+          这个分类已经放在控制面板的导航里（这样你知道它会被做出来），
+          但设置项还在设计中。界面里点它会看到同样的提示。
+        </p>
+        <div class="mt-5 flex justify-center gap-2">
+          <a
+            href="/settings"
+            class="inline-flex items-center gap-1.5 rounded border border-[var(--surface-border)] px-3.5 py-2 text-[12.5px] text-[var(--fg-dim)] no-underline transition-colors hover:bg-[var(--hover)]"
+          >
+            控制面板总览
+          </a>
+          <a
+            href="/settings/appearance"
+            class="inline-flex items-center gap-1.5 rounded bg-[var(--accent)] px-3.5 py-2 text-[12.5px] text-white no-underline transition-colors hover:bg-[var(--accent-hover)]"
+          >
+            去看看已实现的「外观」
+          </a>
+        </div>
+      </div>
+    )
+  }
+
+  <section>
+    <h2 class="mb-4 border-b border-[var(--surface-border)] pb-2 text-[16px] font-semibold text-[var(--fg)]">
+      全部分类
+    </h2>
+    <div class="grid gap-3 sm:grid-cols-2">
+      {
+        SETTINGS_SECTIONS.map((item) => (
+          <a
+            href={`/settings/${item.id}`}
+            class:list={[
+              "flex items-start gap-3 rounded border px-4 py-3.5 no-underline transition-colors",
+              item.id === s.id
+                ? "border-[var(--accent)] bg-[var(--surface)]"
+                : "border-[var(--surface-border)] bg-[var(--surface)] hover:border-[var(--accent)]",
+            ]}
+          >
+            <span class="text-[18px] leading-none">{item.icon}</span>
+            <span class="min-w-0 flex-1">
+              <span class="flex items-center gap-2 text-[13.5px] font-medium text-[var(--fg)]">
+                {item.name}
+                {!item.ready && (
+                  <span class="rounded bg-[var(--surface-3)] px-1.5 py-0.5 text-[10px] font-normal text-[var(--fg-faint)]">
+                    开发中
+                  </span>
+                )}
+              </span>
+              <span class="mt-1 block text-[12.5px] leading-relaxed text-[var(--fg-dim)]">
+                {item.desc}
+              </span>
+            </span>
+          </a>
+        ))
+      }
+    </div>
+  </section>
+</ContentLayout>

@@ -132,6 +132,7 @@ lerna-debug.log*
 test-results/
 playwright-report/
 .playwright/
+src/content/blog
 
 # ⚠️ 注意：下面这几个 .md 文档【不忽略】，建议一起提交：
 #     安装说明-先读我.md
@@ -144,5 +145,3 @@ playwright-report/
 # ⚠️ check-wallpaper.py 和 verify-*.mjs 也【不忽略】：
 #     它们是项目的工具脚本，属于源码的一部分。
 #     别人 clone 下来也能跑 npm run verify 自测。
-
-src/content/blog

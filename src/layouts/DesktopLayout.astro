@@ -46,8 +46,22 @@ const { title = "我的桌面" } = Astro.props;
 
       bg-fixed 不写：这个 div 本身已经是 position:fixed，再加 bg-fixed
       在部分 Safari 上会触发重复合成的 bug，画面会闪。
+
+      ⚠️ 背景色兜底（bg-fallback）。
+
+      背景图有个特性：一旦图片解码失败，这一层就什么都不画 ——
+      直接露出 <body> 的白色。表现就是「图标和任务栏都在，壁纸一片白」，
+      而且控制台不一定有报错，非常难判断。
+
+      所以这里同时设一个底色。图片正常时它被完全盖住（看不见），
+      图片坏掉时至少是一片协调的深蓝，而不是刺眼的纯白。
+
+      这个色值是 Win10 默认壁纸的中间调，和壁纸本身的色调一致。
     */}
-    <div class="fixed inset-0 -z-10 bg-cover bg-center" style="background-image: var(--wallpaper)">
+    <div
+      class="bg-fallback fixed inset-0 -z-10 bg-cover bg-center"
+      style="background-image: var(--wallpaper)"
+    >
     </div>
 
     {/* 页面内容（桌面图标、窗口、任务栏等） */}

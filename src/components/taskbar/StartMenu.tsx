@@ -1,24 +1,135 @@
+import { useMemo, useState } from "react";
+import { motion } from "motion/react";
 import { useWindowStore } from "../../store/windowStore";
 import type { TagInfo } from "../window/views/TagsView";
-import { buildTiles, isExternal, isImageIcon, type LaidOutTile } from "../../lib/tiles";
-import { GRID } from "../../config/tiles";
+import { buildTileGroups, isExternal, isImageIcon, type LaidOutTile } from "../../lib/tiles";
+import {
+  RECENTLY_ADDED,
+  buildAlphaGroups,
+  type MenuItem,
+} from "../../config/startMenu";
 import TileGrid from "./TileGrid";
 
 /**
- * 左侧快捷入口。
+ * Win10 开始菜单。
+ * ================================================================
  *
- * ⚠️ 这里的 id / icon 必须和 Desktop.astro、WindowManager 的 ICON_ROUTES 对上，
- *    尤其是 icon：现在指向 /icons/*.png，如果这边还写着 emoji，
- *    会出现「桌面上是图标，开始菜单里是 emoji」这种不统一。
- *    下面用 <Icon> 渲染，两边共用同一套 isImageIcon 规则，就不会跑偏。
+ * 结构对应你截图里的样子：
+ *
+ *   ┌────────────────┬──────────────────────────────┐
+ *   │ ☰ Recently added│  Create                      │
+ *   │   📄 记事本     │  ┌────┬────┐┌──────────────┐ │
+ *   │   💻 此电脑     │  │ 21 │ 最新││    日历      │ │
+ *   │ ────────────── │  └────┴────┘└──────────────┘ │
+ *   │ Expand ⌄       │  Play                        │
+ *   │ A              │  ┌────┬────┐┌──────────────┐ │
+ *   │   🧮 归档       │  ...                         │
+ *   └────────────────┴──────────────────────────────┘
+ *       260px 宽              剩余宽度
+ *
+ * ⚠️ 三条硬约束（改动前必须知道）：
+ *
+ *   1. data-startmenu 属性不能删。
+ *      任务栏靠它判断「点击是不是在菜单内部」，删了会导致
+ *      点磁贴时菜单先被关掉，磁贴随之卸载，click 永远到不了 ——
+ *      表现为「点了没反应」。
+ *
+ *   2. 整个菜单要能被 Esc 关闭、被点击外部关闭。
+ *      这两件事由 Taskbar.tsx 统一处理（它是菜单的父级），
+ *      这个组件不需要自己监听。别重复加，会触发两次 setState。
+ *
+ *   3. 磁贴的点击分流（站内开窗口 / 外链新标签页）在 activateTile 里。
+ *      加了新入口（比如拖动排序）时别忘了走这条路，否则跳转会不一致。
  */
-const QUICK_LINKS = [
-  { id: "pc", label: "此电脑", icon: "/icons/pc.png", path: "/archive" },
-  { id: "notepad", label: "记事本", icon: "/icons/notepad.png", path: "/posts" },
-  { id: "browser", label: "浏览器", icon: "/icons/browser.png", path: "/about" },
-  { id: "recycle", label: "回收站", icon: "/icons/recycle.png", path: "/drafts" },
-  { id: "control", label: "控制面板", icon: "/icons/control.png", path: "/settings" },
-];
+
+/* ────────────────────────────────────────────────────────────
+   滑入动画
+   ──────────────────────────────────────────────────────────── */
+
+/**
+ * 开始菜单的进出场动画参数。
+ *
+ * ⚠️ 这里是 Framer Motion（motion/react）的 variants 写法，
+ *    不是 CSS 动画 —— 和之前那个 .anim-menu 类不共存，
+ *    两者选一个用（现在是这个）。
+ *
+ * ── 为什么用 Framer Motion 而不是纯 CSS？ ──
+ *
+ *    纯 CSS 做「入场」很容易，做「退场」却几乎做不了：
+ *    CSS 没法在元素被移除后再播一段动画（元素已经不在 DOM 里了）。
+ *
+ *    要做出场就得：
+ *      1. 标记元素为"正在退场"
+ *      2. 加一个退场类
+ *      3. 监听 animationend 事件
+ *      4. 事件到了才真正卸载
+ *    这三步都要手写，而且很容易和 React 的渲染时序打架。
+ *
+ *    Framer Motion 的 AnimatePresence 就是为这件事造的：
+ *    你把组件包起来，它在卸载时会自动延迟到退场动画播完。
+ *    见 Taskbar.tsx 里的 <AnimatePresence>。
+ *
+ * ── 数值为什么是这些？ ──
+ *
+ *    y: 32  —— 从下方 32px 处滑上来。太大会显得"飞"，太小看不出位移。
+ *    scale: 0.95 → 1  —— 轻微的"展开"感。不要再小，否则像在缩放图片。
+ *    duration 0.22 / 0.16 —— 入场比退场慢一点：
+ *        入场要看清内容（0.22s），退场要"干脆地消失"（0.16s）。
+ *        反过来会显得菜单很黏。
+ */
+const menuVariants = {
+  hidden: { opacity: 0, y: 32, scale: 0.95 },
+  visible: { opacity: 1, y: 0, scale: 1 },
+  exit: { opacity: 0, y: 20, scale: 0.97 },
+};
+
+const menuTransition = {
+  // ⚠️ ease 用 Win10 的那条曲线（起步快、收尾缓）
+  //    定义在 global.css 的 --ease-win 里，这里写成等价的三次贝塞尔。
+  ease: [0.1, 0.9, 0.2, 1] as const,
+  duration: 0.22,
+};
+
+/* ────────────────────────────────────────────────────────────
+   左侧列表的一个条目
+   ──────────────────────────────────────────────────────────── */
+
+function NavRow({ item, onClick }: { item: MenuItem; onClick: (item: MenuItem) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onClick(item)}
+      /**
+       * 悬停用背景色过渡，不是位移。
+       *
+       * ⚠️ 这是有意和磁贴区做区分：
+       *    右边磁贴 hover 是「浮起来」（位移 + 阴影），
+       *    左边列表 hover 是「点亮」（背景变亮）。
+       *    如果两边都用同一套反馈，整个菜单会显得没有层次。
+       */
+      className="flex w-full items-center gap-3 px-4 py-[7px] text-left text-[12px]
+                 transition-colors duration-150
+                 hover:bg-[var(--hover-invert)]
+                 focus:outline-none focus-visible:bg-[var(--hover-invert)]
+                 active:bg-[var(--hover-invert-strong)]"
+    >
+      <NavIcon icon={item.icon} />
+      <span className="truncate">{item.name}</span>
+    </button>
+  );
+}
+
+/** 图标渲染：图片走 img，其它当 emoji */
+function NavIcon({ icon }: { icon: string }) {
+  if (isImageIcon(icon)) {
+    return <img src={icon} alt="" className="h-4 w-4 shrink-0 object-contain" draggable={false} />;
+  }
+  return <span className="w-4 shrink-0 text-center text-[15px] leading-none">{icon}</span>;
+}
+
+/* ────────────────────────────────────────────────────────────
+   主组件
+   ──────────────────────────────────────────────────────────── */
 
 export interface StartMenuProps {
   /** 真实分类，由 Astro 在构建期算好传进来 */
@@ -31,42 +142,47 @@ export default function StartMenu({ categories, tags }: StartMenuProps) {
   const open = useWindowStore((s) => s.open);
   const setStartMenu = useWindowStore((s) => s.setStartMenu);
 
+  /** 「Expand」是否展开（收起时只显示首字母，不显示条目） */
+  const [expanded, setExpanded] = useState(true);
+
   /**
-   * 点快捷方式：开窗口 + 收起菜单
-   * 快捷方式都是站内路径，不用判断外链。
+   * 点左侧条目。
+   *
+   * 和磁贴一样要分流：站内开窗口，外部链接走浏览器跳转。
+   * 抽成函数是为了让 RECENTLY_ADDED 和 ALL_APPS 共用同一套逻辑 ——
+   * 否则以后加一个入口就要复制一遍这段，迟早改漏一处。
    */
-  const goto = (item: { id: string; label: string; icon: string; path: string }) => {
-    open({ id: item.id, title: item.label, icon: item.icon, path: item.path });
-    if (window.location.pathname !== item.path) {
-      window.history.replaceState({ path: item.path }, "", item.path);
+  const goto = (item: MenuItem) => {
+    if (isExternal(item.url)) {
+      window.open(item.url, "_blank", "noopener,noreferrer");
+      setStartMenu(false);
+      return;
+    }
+
+    open({ id: item.id, title: item.name, icon: item.icon, path: item.url });
+
+    if (window.location.pathname !== item.url) {
+      window.history.replaceState({ path: item.url }, "", item.url);
     }
     setStartMenu(false);
   };
 
-  /**
-   * 点磁贴。
-   *
-   * 这里要分流：站内路径开窗口，外部链接走浏览器跳转。
-   * 判断逻辑封装在 isExternal 里，配置里不用手动标记 ——
-   * 少一个字段就少一处可能写错的地方。
-   */
+  /** 点磁贴：站内开窗口，外链新标签页 */
   const activateTile = (tile: LaidOutTile) => {
     if (isExternal(tile.path)) {
-      // 外链：新标签页打开
       // noopener 是必须的：防止新页面通过 window.opener 操作本站
       window.open(tile.path, "_blank", "noopener,noreferrer");
       setStartMenu(false);
       return;
     }
 
-    // 站内：开窗口
     open({
       id: tile.id,
       title: tile.label,
       icon: tile.icon,
       path: tile.path,
-      // 大磁贴对应大一点的窗口，视觉上有关联
-      ...(tile.size === "lg" ? { w: 860, h: 560 } : {}),
+      // 宽/大磁贴对应大一点的窗口，视觉上有关联
+      ...(tile.pos.colSpan * tile.pos.rowSpan >= 2 ? { w: 860, h: 560 } : {}),
     });
 
     if (window.location.pathname !== tile.path) {
@@ -76,20 +192,32 @@ export default function StartMenu({ categories, tags }: StartMenuProps) {
   };
 
   /**
-   * 合成磁贴列表。
+   * 合成磁贴分组。
    *
-   * 注意这里【没有】读 localStorage —— 那是拖动排序阶段的事。
-   * 这一阶段磁贴顺序完全由配置文件决定，先把这个跑通。
+   * ⚠️ 用 useMemo 是因为 buildTileGroups 里有 first-fit 排布循环，
+   *    每次渲染都重算一遍是浪费 —— 而且它还会 console.warn，
+   *    重算会把这些警告刷很多遍。
    */
-  const tiles = buildTiles({ categories, tags });
+  const tileGroups = useMemo(
+    () => buildTileGroups({ categories, tags }),
+    [categories, tags],
+  );
 
-  const externalCount = tiles.filter((t) => isExternal(t.path)).length;
+  /**
+   * 字母索引分组。
+   *
+   * ⚠️ 依赖 ALL_APPS 这个模块级常量（不随渲染变化），
+   *    所以这里用 useMemo 且依赖数组为空。
+   *    如果以后 ALL_APPS 改成从 props 传进来，记得把它加进依赖。
+   */
+  const alphaGroups = useMemo(() => buildAlphaGroups(), []);
+
+  const tileCount = tileGroups.reduce((n, g) => n + g.tiles.length, 0);
 
   return (
-    <div
+    <motion.div
       /**
        * ⚠️ data-startmenu 是给 Taskbar 的「点击外部关闭」判断用的。
-       *
        *    开始菜单和任务栏是兄弟节点，不在任务栏的 DOM 里。
        *    Taskbar 在 capture 阶段监听 mousedown 来关闭菜单，
        *    如果没有这个标记，点磁贴会被误判成「点到了外面」，
@@ -99,74 +227,111 @@ export default function StartMenu({ categories, tags }: StartMenuProps) {
        *    别删这个属性。
        */
       data-startmenu
+      variants={menuVariants}
+      initial="hidden"
+      animate="visible"
+      exit="exit"
+      transition={menuTransition}
       /**
-       * 材质 + 滑入动画。
+       * ⚠️ transformOrigin 必须在左下角。
        *
-       * .acrylic      半透明底 + 背景模糊 + 饱和度增强（暗色自动适配）
-       * .anim-menu    从下方 32px 处滑入 + 淡入，transform-origin 在左下角
-       *
-       * 为什么 transform-origin 要放左下角？
-       * 因为开始菜单是从任务栏左下角的开始按钮那个位置"长"出来的，
-       * 以左下角为原点缩放/位移，视觉上才有"从按钮弹出"的连贯感。
-       * 默认的 center 原点会让它像是凭空浮现在屏幕中间。
-       *
-       * 动画关掉时 .no-anim 会把时长压到 0.01ms，视觉上等于没有动画，
-       * 但动画事件照常触发 —— 这是有意为之，避免依赖动画结束的代码卡死。
+       *    因为开始菜单是从任务栏左下角的开始按钮那个位置"长"出来的，
+       *    以左下角为原点缩放/位移，视觉上才有"从按钮弹出"的连贯感。
+       *    默认的 center 原点会让它像是凭空浮现在屏幕中间。
        */
-      className="acrylic anim-menu fixed bottom-[var(--taskbar-h)] left-0 z-[110] flex w-[640px]
-                 max-w-[100vw] border border-[var(--acrylic-border)] text-[var(--fg-on-acrylic)]
-                 shadow-[var(--acrylic-shadow)]"
+      style={{ transformOrigin: "bottom left" }}
+      /**
+       * 尺寸：宽 640px，高自适应但最高 600px。
+       *
+       * ⚠️ max-h 用的是 calc(100vh - 任务栏高度 - 一点余量)，
+       *    不是写死的 600px。原因：在小屏笔记本上（比如 1366×768），
+       *    任务栏 40px + 菜单 600px = 640px，剩下连窗口标题栏都放不下；
+       *    而且菜单一旦超过视口高度，底部内容会被切掉且看不见 —— 
+       *    用户根本不知道下面还有东西。
+       */
+      className="start-menu fixed bottom-[var(--taskbar-h)] left-0 z-[110]
+                 flex h-[600px] max-h-[calc(100vh-var(--taskbar-h)-16px)] w-[640px] max-w-[100vw]
+                 overflow-hidden rounded-tr-[6px]
+                 border border-[var(--acrylic-border)] text-[var(--fg-on-acrylic)]
+                 shadow-[var(--acrylic-shadow)]
+                 acrylic"
     >
-      {/* ── 左：快捷入口 ── */}
-      <div className="flex w-[190px] shrink-0 flex-col py-3">
-        <div className="px-4 pb-2 text-[11px] uppercase tracking-wide opacity-50">快捷方式</div>
-        {QUICK_LINKS.map((l) => (
-          <button
-            key={l.id}
-            onClick={() => goto(l)}
-            className="flex items-center gap-3 px-4 py-2 text-left text-[12px]
-                       transition-colors hover:bg-[var(--hover-invert)]"
-          >
-            {isImageIcon(l.icon) ? (
-              <img src={l.icon} alt="" className="h-4 w-4 shrink-0 object-contain" />
-            ) : (
-              <span className="text-[16px] leading-none">{l.icon}</span>
-            )}
-            <span className="truncate">{l.label}</span>
-          </button>
-        ))}
+      {/* ══ 左栏：导航（固定 260px）══ */}
+      <div
+        className="start-menu-nav flex w-[260px] shrink-0 flex-col
+                   border-r border-[var(--acrylic-border)]
+                   bg-[var(--menu-nav-bg)]"
+      >
+        {/* 滚动区：条目多的时候能滚，但两个区域是一起滚的 */}
+        <div className="startmenu-scroll min-h-0 flex-1 overflow-y-auto py-2">
+          {/* ── 最近添加 ── */}
+          <div className="px-4 pb-1 pt-1 text-[11px] opacity-55">最近添加</div>
+          {RECENTLY_ADDED.map((item) => (
+            <NavRow key={item.id} item={item} onClick={goto} />
+          ))}
 
-        <div className="mt-auto px-4 pt-3 text-[10px] leading-relaxed opacity-45">
-          双击桌面图标开窗口
-          <br />
-          Ctrl + 点击可开静态页
+          {/* 分割线 */}
+          <div className="my-2 h-px bg-[var(--acrylic-border)]" />
+
+          {/* ── Expand 开关 ── */}
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            aria-expanded={expanded}
+            className="flex w-full items-center gap-2 px-4 py-[7px] text-left text-[11px] opacity-70
+                       transition-colors duration-150 hover:bg-[var(--hover-invert)]
+                       focus:outline-none focus-visible:bg-[var(--hover-invert)]"
+          >
+            <span className="truncate">{expanded ? "收起" : "展开"}</span>
+            {/*
+              箭头旋转 180° 表示展开/收起。
+              用 CSS 的 rotate 而不是换一个字符（▲/▼）——
+              换字符会让文字基线跳动，rotate 不会。
+            */}
+            <span
+              className="inline-block leading-none transition-transform duration-200"
+              style={{ transform: expanded ? "rotate(0deg)" : "rotate(180deg)" }}
+            >
+              ⌄
+            </span>
+          </button>
+
+          {/* ── 字母索引 ── */}
+          {alphaGroups.map((group) => (
+            <div key={group.letter}>
+              <div className="px-4 pb-0.5 pt-2 text-[11px] font-medium opacity-55">
+                {group.letter}
+              </div>
+
+              {/*
+                ⚠️ 收起时只显示字母标题，不渲染条目。
+                   这是 Win10 Expand 按钮的真实行为 ——
+                   它折叠的是"所有应用"这一大块，不是整个菜单。
+              */}
+              {expanded &&
+                group.items.map((item) => (
+                  <NavRow key={item.id} item={item} onClick={goto} />
+                ))}
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* 分隔线 */}
-      <div className="my-3 w-px shrink-0 bg-[var(--acrylic-border)]" />
+      {/* ══ 右栏：磁贴（占剩余宽度）══ */}
+      <div className="start-menu-tiles min-w-0 flex-1 overflow-y-auto p-5">
+        <TileGrid groups={tileGroups} onActivate={activateTile} />
 
-      {/* ── 右：磁贴 ── */}
-      <div className="startmenu-scroll min-w-0 flex-1 overflow-y-auto px-4 py-3">
-        <div className="mb-3 flex items-baseline gap-2 text-[11px] uppercase tracking-wide opacity-50">
-          磁贴
-          <span className="normal-case tracking-normal opacity-80">
-            {tiles.length} 个
-            {externalCount > 0 && ` · ${externalCount} 个外链`}
-          </span>
-          <span className="ml-auto normal-case tracking-normal opacity-70">
-            网格 {GRID.columns} 列 · {GRID.cell}px
-          </span>
-        </div>
-
-        {/* 磁贴网格：绝对定位坐标系 + 手算 first-fit 排布 */}
-        <TileGrid tiles={tiles} onActivate={activateTile} />
-
-        <p className="mt-4 text-[10.5px] leading-relaxed opacity-40">
-          磁贴来自 <code>src/config/tiles.ts</code>，分类和标签会自动追加。
-          {externalCount > 0 && " 外链磁贴会在新标签页打开。"}
+        {/*
+          ⚠️ 底部提示只在磁贴特别多的时候才有意义。
+             它是给"配置改坏了"这种情况留的线索 ——
+             比如磁贴排不下被跳过时，用户能看到总数对不对得上。
+        */}
+        <p className="mt-3 text-[10.5px] leading-relaxed opacity-40">
+          共 {tileCount} 个磁贴
+          {" · "}
+          改 <code>src/config/tiles.ts</code> 增删
         </p>
       </div>
-    </div>
+    </motion.div>
   );
 }

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { AnimatePresence } from "motion/react";
 import { useWindowStore } from "../../store/windowStore";
 import { useClock } from "../../hooks/useClock";
 import { useIsMobile } from "../../hooks/useIsMobile";
@@ -112,8 +113,33 @@ export default function Taskbar({ categories, tags }: StartMenuProps) {
 
   return (
     <>
-      {/* 开始菜单贴着任务栏上沿展开 */}
-      {startMenuOpen && <StartMenu categories={categories} tags={tags} />}
+      {/*
+        开始菜单贴着任务栏上沿展开。
+
+        ⚠️⚠️ 必须用 <AnimatePresence> 包起来，不能直接
+              {startMenuOpen && <StartMenu />}。
+
+        原因：Framer Motion 的「退场动画」需要在组件卸载【期间】
+        仍然把它留在 DOM 里播动画。而 {cond && <X/>} 是
+        「false 就立刻卸载」，元素当场消失，退场动画根本没机会跑 ——
+        结果是菜单"啪"一下不见，只有入场是动画的，很不协调。
+
+        AnimatePresence 做的事就是：拦住这次卸载，等内部的
+        motion 元素把 exit 动画播完，再真正移除。所以 StartMenu
+        根元素必须是 <motion.div> 并且写了 variants/exit。
+
+        ⚠️ mode="wait" 是必须的。
+        不写的话，快速连点开始按钮会出现「上一个还在退场、
+        下一个已经在入场」的重叠状态，两个菜单叠在一起。
+
+        ⚠️ AnimatePresence 的子元素【必须】有稳定的 key。
+        这里因为只有一个菜单，用固定字符串即可。
+        如果以后要支持多个弹层轮流出现，key 必须各不相同，
+        否则 AnimatePresence 分不清谁是谁。
+      */}
+      <AnimatePresence mode="wait">
+        {startMenuOpen && <StartMenu key="start-menu" categories={categories} tags={tags} />}
+      </AnimatePresence>
 
       <div
         ref={barRef}

@@ -1,4 +1,5 @@
 import { getCollection, render, type CollectionEntry } from "astro:content";
+import { stripLatex } from "./markdown";
 
 /**
  * 文章数据层 —— 本站所有「文章列表 / 分类 / 标签 / 归档」的唯一真相来源。
@@ -67,10 +68,17 @@ function toMeta(entry: CollectionEntry<"blog">): PostMeta {
   };
 }
 
-/** 摘要：优先用 frontmatter 的 description，没有就从正文前 80 字抠 */
+/**
+ * 摘要：优先用 frontmatter 的 description，没有就从正文前 80 字抠。
+ *
+ * ⚠️ 注意这里和 lib/markdown.ts 的 stripMarkdown 是【两份】相似的逻辑，
+ *    原因是一个跑在构建期（这里，随 getCollection 一起），
+ *    一个跑在浏览器里（那边，给窗口内用）。
+ *    两边都要处理 LaTeX —— 漏了任意一处，那处的摘要就会出现 $E=mc^2$ 这种原始符号。
+ */
 function makeExcerpt(description: string, body: string): string {
   if (description) return description;
-  const plain = body
+  const plain = stripLatex(body) // ⚠️ 必须最先做，否则 _ 和 * 会被下面的规则当成斜体标记吃掉
     .replace(/```[\s\S]*?```/g, " ")
     .replace(/[#>*`_\[\]()!-]/g, " ")
     .replace(/\s+/g, " ")
@@ -147,6 +155,77 @@ export async function getPostsByCategory(category: string): Promise<Post[]> {
   return posts.filter((p) => p.category === category);
 }
 
+/**
+ * 取文章分类的第一层（顶层分类）。
+ *
+ * ⚠️ 为什么需要「第一层」这个概念？
+ *
+ *    因为 category 支持斜杠表达层级（"前端/Astro"）。
+ *    开始菜单的磁贴、标签页里的分类列表，都不应该显示
+ *    "前端/Astro" 这种带斜杠的字符串 —— 那是路径，不是分类名。
+ *
+ *    正确的做法是：磁贴显示顶层「前端」，
+ *    点进去看到「Astro」子分类 + 直接挂在「前端」下的文章。
+ *
+ *    所以这里返回的是拆分后的第一段，并把同一顶层的文章数合并。
+ *
+ *      category: 前端           → 顶层「前端」+1
+ *      category: 前端/Astro     → 顶层「前端」+1
+ *      category: 前端/Markdown  → 顶层「前端」+1
+ *      ────────────────────────
+ *      结果：{ name: "前端", count: 3 }
+ */
+export async function getTopCategories(): Promise<{ name: string; count: number }[]> {
+  const posts = await getPosts(false);
+  const map = new Map<string, number>();
+
+  for (const p of posts) {
+    const top = (p.category ?? "").split("/")[0].trim() || "未分类";
+    map.set(top, (map.get(top) ?? 0) + 1);
+  }
+
+  return [...map.entries()]
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "zh"));
+}
+
+/**
+ * 按分类路径取文章（支持层级）。
+ *
+ * ⚠️ 两种匹配模式，看 prefix 参数：
+ *
+ *    prefix = false（默认）严格匹配
+ *      getPostsByCategoryPath("前端/Astro")
+ *        → 只返回 category 恰好是 "前端/Astro" 的文章
+ *
+ *    prefix = true 前缀匹配
+ *      getPostsByCategoryPath("前端", true)
+ *        → 返回 "前端"、"前端/Astro"、"前端/Markdown" 下的【全部】文章
+ *
+ *    为什么两种都要？
+ *    因为分类页有两种访问方式：
+ *      点顶层「前端」磁贴   → 想看到这个大类下的所有文章（prefix）
+ *      点面包屑「前端/Astro」→ 只想看这个精确分类（严格）
+ *    只支持一种的话，总有一个入口的结果不符合直觉。
+ */
+export async function getPostsByCategoryPath(
+  path: string,
+  prefix = false,
+): Promise<Post[]> {
+  const posts = await getPosts(false);
+  const target = path.trim();
+
+  if (prefix) {
+    // 「前端」应该匹配 "前端" 和 "前端/Astro"，
+    // 但【不应该】匹配到 "前端进阶" —— 所以比的是 "前缀 + /" 和 "全等"
+    return posts.filter(
+      (p) => p.category === target || p.category.startsWith(`${target}/`),
+    );
+  }
+
+  return posts.filter((p) => p.category === target);
+}
+
 /** 按标签取文章 */
 export async function getPostsByTag(tag: string): Promise<Post[]> {
   const posts = await getPosts(false);
@@ -187,9 +266,13 @@ export async function getStats() {
   const tags = await getTags();
 
   const words = posts.reduce((sum, p) => {
+    // ⚠️ 先去掉 LaTeX 公式再统计。
+    //    否则 \int_{-\infty}^{\infty} e^{-x^2} dx 会被当成十几个"英文单词"，
+    //    一篇公式多的文章，字数会被严重高估。
+    const text = stripLatex(p.body);
     // 中文按字数算，英文按词算，粗略但不失真
-    const cn = (p.body.match(/[\u4e00-\u9fa5]/g) ?? []).length;
-    const en = (p.body.match(/[a-zA-Z]+/g) ?? []).length;
+    const cn = (text.match(/[\u4e00-\u9fa5]/g) ?? []).length;
+    const en = (text.match(/[a-zA-Z]+/g) ?? []).length;
     return sum + cn + en;
   }, 0);
 

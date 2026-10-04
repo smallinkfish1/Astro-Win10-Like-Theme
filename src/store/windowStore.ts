@@ -76,6 +76,10 @@ const TASKBAR_H = 40;
  *                      480 高会让正文只剩两行，看着像坏了
  *   pc      840×560 —— 左树 155px + 右表格三列，720 宽会把标题挤到换行
  *   browser 700×580 —— 内容是一列卡片，太宽反而显得空
+ *   control 900×620 —— 改成左右分栏后，左导航固定 168px；
+ *                      再按老的 620 宽算，右侧只剩 450px，
+ *                      壁纸缩略图网格会挤成两列，很难看清。
+ *                      900 宽能放下四列缩略图，是控制面板的舒适值。
  *   其余保持接近默认值，够用就行
  */
 const APP_SIZE: Record<string, { w: number; h: number }> = {
@@ -83,8 +87,37 @@ const APP_SIZE: Record<string, { w: number; h: number }> = {
   notepad: { w: 740, h: 620 },
   browser: { w: 700, h: 580 },
   recycle: { w: 720, h: 520 },
-  control: { w: 620, h: 520 },
+  control: { w: 900, h: 620 },
 };
+
+/**
+ * 给窗口 id 找预设尺寸。
+ *
+ * ⚠️⚠️ 必须支持【前缀匹配】。
+ *
+ *    窗口 id 有两类：
+ *      简单 id       "pc"、"notepad"、"control"
+ *      带参数的 id   "post:why-win10"、"notepad:why-win10"、"control:appearance"
+ *
+ *    带参数的 id 查 APP_SIZE["notepad:why-win10"] 会得到 undefined，
+ *    于是回落到全局默认的 720×480 ——
+ *    表现就是"从桌面图标打开的记事本很高（620），
+ *    从此电脑打开文章的记事本却很矮（480）"，
+ *    同一个应用两个尺寸，很难看，而且非常难查
+ *    （因为两个入口都"能用"，只是长相不同）。
+ *
+ *    所以这里先查全长 id，查不到就取冒号前面那段再查。
+ *
+ * ⚠️ 为什么不干脆用 startsWith 遍历一遍？
+ *    那样 "notepadd:xxx" 这种错拼也会命中 "notepad"，把 bug 藏起来。
+ *    精确切分 + 再查表，错了就错了（回落到默认尺寸），反而好发现。
+ */
+function presetSize(id: string): { w: number; h: number } | undefined {
+  const direct = APP_SIZE[id];
+  if (direct) return direct;
+  const head = id.split(":")[0];
+  return APP_SIZE[head];
+}
 
 /** 自动排布：新窗口按数量错开，避免完全叠在一起 */
 function nextPosition(count: number) {
@@ -115,7 +148,7 @@ export const useWindowStore = create<WindowStore>((set, get) => ({
     }
 
     // 尺寸优先级：调用方显式指定 > 应用默认表 > 全局默认
-    const preset = APP_SIZE[p.id];
+    const preset = presetSize(p.id);
     const w = p.w ?? preset?.w ?? 720;
     const h = p.h ?? preset?.h ?? 480;
 

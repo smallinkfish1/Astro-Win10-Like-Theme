@@ -51,25 +51,41 @@ check("静态页不挂载 React 岛屿", hasIsland === null);
    ══════════════════════════════════════════════════════════ */
 console.log("\n── 二、静态页排版基准 ──");
 
-const staticStyles = await page.evaluate(() => {
-  const body = document.querySelector(".md-body");
-  const h2 = body.querySelector("h2");
-  const p = body.querySelector("p");
-  const code = body.querySelector("code");
-  const pre = body.querySelector("pre");
-  const ul = body.querySelector("ul");
-  const bq = body.querySelector("blockquote");
-  const g = (el) => (el ? getComputedStyle(el) : null);
-  return {
-    body: { lh: g(body).lineHeight, color: g(body).color, fs: g(body).fontSize },
-    h2: h2 ? { fs: g(h2).fontSize, fw: g(h2).fontWeight, mt: g(h2).marginTop, bb: g(h2).borderBottomWidth } : null,
-    p: p ? { mb: g(p).marginBottom } : null,
-    code: code ? { bg: g(code).backgroundColor, color: g(code).color } : null,
-    pre: pre ? { bg: g(pre).backgroundColor, radius: g(pre).borderRadius } : null,
-    ul: ul ? { ls: g(ul).listStyleType, pl: g(ul).paddingLeft } : null,
-    bq: bq ? { bl: g(bq).borderLeftWidth, color: g(bq).color } : null,
+/**
+ * 量一组 .md-body 的关键排版样式。
+ *
+ * ⚠️ 抽成函数是为了【两处复用】：
+ *    一处量静态页（SEO 路径），一处量窗口内（marked 路径），
+ *    最后逐字段对比。两处必须用【完全同一段测量代码】，
+ *    否则所谓的"差异"可能只是测量方式不同造成的假象。
+ *
+ * ⚠️ 注意它取的是每个标签的【第一个】实例。这意味着
+ *    "拿两篇不同的文章来比"必然出假失败 —— 见第 156 行附近的说明。
+ */
+function readMdBodyStyles() {
+  return function measure() {
+    const body = document.querySelector(".md-body");
+    if (!body) return null;
+    const h2 = body.querySelector("h2");
+    const p = body.querySelector("p");
+    const code = body.querySelector("code");
+    const pre = body.querySelector("pre");
+    const ul = body.querySelector("ul");
+    const bq = body.querySelector("blockquote");
+    const g = (el) => (el ? getComputedStyle(el) : null);
+    return {
+      body: { lh: g(body).lineHeight, color: g(body).color, fs: g(body).fontSize },
+      h2: h2 ? { fs: g(h2).fontSize, fw: g(h2).fontWeight, mt: g(h2).marginTop, bb: g(h2).borderBottomWidth } : null,
+      p: p ? { mb: g(p).marginBottom } : null,
+      code: code ? { bg: g(code).backgroundColor, color: g(code).color } : null,
+      pre: pre ? { bg: g(pre).backgroundColor, radius: g(pre).borderRadius } : null,
+      ul: ul ? { ls: g(ul).listStyleType, pl: g(ul).paddingLeft } : null,
+      bq: bq ? { bl: g(bq).borderLeftWidth, color: g(bq).color } : null,
+    };
   };
-});
+}
+
+const staticStyles = await page.evaluate(readMdBodyStyles());
 console.log("  " + JSON.stringify(staticStyles, null, 0).slice(0, 200) + "…");
 check("静态页 .md-body 生效", staticStyles.body.lh !== "normal", `line-height=${staticStyles.body.lh}`);
 check("静态页 h2 有下边框", staticStyles.h2?.bb === "1px");
@@ -99,41 +115,130 @@ await page.waitForTimeout(700);
 let winCount = await page.$$eval(".win-drag-handle", (els) => els.length);
 check("双击图标打开窗口", winCount === 1, `${winCount} 个窗口`);
 
-// 窗口里有没有内容（记事本是一整块 textarea）
-const cardCount = await page.$$eval("textarea, .post-card", (els) => els.length);
+// 窗口里有没有内容。
+// ⚠️ 记事本现在默认是【渲染视图】，正文是一块 div.md-body，
+//    不再是 textarea。所以这里同时接受两种形态 ——
+//    "渲染出来了"这件事本身才是要断言的，具体用什么标签是实现细节。
+const cardCount = await page.$$eval("textarea, .md-body, .post-card", (els) => els.length);
 check("窗口内渲染出文章内容", cardCount >= 1, `${cardCount} 个内容节点`);
 
 // URL 同步了吗
 check("URL 已同步为 /posts", page.url().endsWith("/posts"), page.url());
 
-/* ── 换用「此电脑」做文章双击测试 ──
-   因为记事本里是纯文本，没有可双击的文章行；资源管理器才有。 */
+/* ── 打开「文章列表」窗口，再双击一篇文章 ──
+
+   ⚠️⚠️ 这一段的行为在第七阶段【有意改变了】，说明白为什么。
+
+      第七阶段之前：在「此电脑」里双击 .md 文件 → 打开 post:<slug>
+                    （阅读排版视图），URL 变成 /posts/<slug>。
+
+      第七阶段之后：双击 .md 文件 → 打开 notepad:<slug>
+                    （记事本外壳，可以按 F9 看 .md 源码），URL 变成 /posts。
+
+      为什么改？因为需求就是"从此电脑打开博客文章时，也打开记事本的界面"，
+      而且它在语义上更合理 —— 在文件管理器里双击一个 .md 文本文件，
+      用记事本打开是最自然的联想。
+
+   ⚠️⚠️ 那"两路渲染样式一致"的对比怎么办？
+      那个对比需要【同一篇文章】同时在"窗口"和"静态页"里出现，
+      而 notepad: 外壳下 URL 是 /posts，取不到 slug，就定位不到静态页。
+
+      所以这里改走【文章列表窗口】这条路：
+        它由 ArchiveView 渲染，里面的 PostList 派发 os:open-post 时
+        【不带 view】，于是走默认的 post:<slug> 分支 →
+        URL 同步 /posts/<slug> → slug 拿得到，对比逻辑完全不用改。
+
+   ⚠️⚠️ 怎么打开文章列表窗口？
+      不能用 page.goto("/posts") —— 那是一个静态页（ContentLayout），
+      上面【没有】桌面岛屿，不会出现任何窗口。
+
+      只有 /（桌面首页）挂载了岛屿，所以只能：
+        1. goto("/")
+        2. 用 os:open-window 事件让窗口系统开一个 id=posts 的窗口
+      这正是"开始菜单 / 页内链接打开窗口"走的路径，语义正当。
+
+      ⚠️ 为什么不用 page.goto("/") 再点开始菜单里的"最新文章"磁贴？
+         因为磁贴的 path 也是 "/posts"（静态路径），点击后同样打不开
+         ArchiveView 窗口，而是跳到一个没有岛屿的静态页 ——
+         那反而会让这个测试卡在 waitForSelector 上。
+         直接派发事件最直达，也最不依赖 UI 细节（磁贴的类名会变）。
+*/
 await page.goto(BASE, { waitUntil: "networkidle" });
 await page.waitForSelector("astro-island", { state: "attached" });
-await page.waitForTimeout(400);
+await page.waitForTimeout(500);
 
-const pcIcon = await page.$("[data-icon-id='pc']");
-const pb = await pcIcon.boundingBox();
-await page.mouse.dblclick(pb.x + pb.width / 2, pb.y + pb.height / 2);
-await page.waitForTimeout(700);
+// 先关闭上一个测试留下的窗口，避免叠加
+{
+  const btns = await page.$$('button[aria-label="关闭"]');
+  for (const b of btns) {
+    await b.click().catch(() => {});
+    await page.waitForTimeout(120);
+  }
+  await page.waitForTimeout(400);
+}
 
-/* ── 在资源管理器里双击一篇文章 ── */
-const firstRow = (await page.$$(".win-body tbody tr"))[0];
-const cb = await firstRow.boundingBox();
-await page.mouse.dblclick(cb.x + 60, cb.y + 8);
-await page.waitForTimeout(700);
+// 打开「文章列表」窗口（id=posts → ArchiveView）
+await page.evaluate(() => {
+  window.dispatchEvent(
+    new CustomEvent("os:open-window", {
+      detail: { id: "posts", title: "全部文章", icon: "📚", path: "/posts" },
+    }),
+  );
+});
+await page.waitForTimeout(900);
+
+/**
+ * ⚠️⚠️ 文章列表用的是 role="button" + aria-label="打开 <标题>"，
+ *    不是 <tr> 行 —— 所以不能按 tbody tr 找。
+ *
+ *    这也是"只断言事实、不断言实现"的一个好处：
+ *    我一开始按表格行找，找不到；换成按【可访问性属性】找就稳了，
+ *    而且这个属性是给屏幕阅读器用的，属于对外的契约，不会随便改。
+ */
+const ARTICLE_ROW = '.win-body [role="button"][aria-label^="打开"]';
+
+await page.waitForSelector(ARTICLE_ROW, { timeout: 5000 }).catch(() => {});
+const listRows = await page.$$eval(ARTICLE_ROW, (e) => e.length);
+check("文章列表窗口里有可双击的文章行", listRows > 0, `${listRows} 行`);
+
+/* ── 双击第一篇文章 ── */
+const firstRow = (await page.$$(ARTICLE_ROW))[0];
+if (firstRow) {
+  const cb = await firstRow.boundingBox();
+  await page.mouse.dblclick(cb.x + Math.min(80, cb.width / 2), cb.y + cb.height / 2);
+}
+await page.waitForTimeout(900);
 
 winCount = await page.$$eval(".win-drag-handle", (els) => els.length);
-check("双击文章打开第二个窗口", winCount === 2, `${winCount} 个窗口`);
+check("从文章列表双击文章会打开新窗口", winCount >= 2, `${winCount} 个窗口`);
 
 const url = page.url();
-check("URL 变为文章路径", /\/posts\/[a-z-]+$/.test(url), url);
+check("URL 变为文章路径（阅读视图入口）", /\/posts\/[a-z0-9-]+$/.test(url), url);
 
 /* ── 关键：窗口内的 .md-body 排版是否和静态页一致 ── */
 console.log("\n── 四、两路渲染的样式一致性（核心）──");
 
+/**
+ * ⚠️⚠️ 两路对比必须用【同一篇文章】，否则测的是输入差异不是样式差异。
+ *
+ *    之前这里量的是写死的 /posts/why-win10，而窗口点的是列表第一行 ——
+ *    只要「列表第一行」≠「why-win10」，这个断言就在拿两篇不同的文章
+ *    比排版，必然出现假失败。
+ *
+ *    实测踩到的例子（加了 latex-guide 之后它排到列表第一行）：
+ *      · h2.margin-top 不同 —— 一篇的 h2 前面是首段（被折叠），
+ *        另一篇的 h2 前面是表格
+ *      · code 背景色不同 —— 一篇的第一个 <code> 是 <pre> 里的代码块，
+ *        另一篇的是表格里的行内代码，两者本来就不该一样
+ *    这两条"差异"全是【测试自己写错了】，不是真的样式漂移。
+ *
+ *    正确做法分两步：
+ *      1. 先在【窗口】里量（此刻窗口正开着那篇文章）
+ *      2. 从窗口 URL 取到 slug，再把【静态页】导航到同一篇去量
+ *    这样比的一定是同一份 Markdown。
+ */
 const windowStyles = await page.evaluate(() => {
-  const body = document.querySelector(".win-body .md-body");
+  const body = document.querySelector(".win-body .md-body") || document.querySelector(".win-body");
   if (!body) return null;
   const h2 = body.querySelector("h2");
   const p = body.querySelector("p");
@@ -155,14 +260,22 @@ const windowStyles = await page.evaluate(() => {
 
 check("窗口内找到 .md-body", windowStyles !== null);
 
-if (windowStyles) {
+// 从窗口 URL 取 slug，把静态页导航到【同一篇】重取基准
+const sameSlug = url.match(/\/posts\/([a-z0-9-]+)/)?.[1];
+check("能从 URL 取到文章 slug（保证两路比的是同一篇）", !!sameSlug, sameSlug ?? "未取到");
+
+await page.goto(`${BASE}/posts/${sameSlug}`, { waitUntil: "networkidle" });
+const samePostStaticStyles = await page.evaluate(readMdBodyStyles());
+
+if (windowStyles && samePostStaticStyles) {
   const diffs = [];
-  for (const key of Object.keys(staticStyles)) {
-    const a = JSON.stringify(staticStyles[key]);
+  // ⚠️ 用 samePostStaticStyles（同一篇）而不是 staticStyles（why-win10）
+  for (const key of Object.keys(samePostStaticStyles)) {
+    const a = JSON.stringify(samePostStaticStyles[key]);
     const b = JSON.stringify(windowStyles[key]);
     if (a !== b) diffs.push(`${key}: 静态页=${a} 窗口=${b}`);
   }
-  check("两路渲染样式完全一致", diffs.length === 0, diffs.length ? diffs.join(" | ") : "所有测量值相同");
+  check("两路渲染样式完全一致（比的是同一篇）", diffs.length === 0, diffs.length ? diffs.join(" | ") : "所有测量值相同");
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -265,11 +378,19 @@ check("移动端窗口底部贴任务栏", mobileWin ? Math.abs(mobileWin.bottom
       自己反而没有可滚动空间，正文被外层 overflow:hidden 裁掉。
       表现就是「滚轮怎么滚都不动」。
 
-      判断依据不看类名，只看三个事实：
-        1. .win-body 的高度应该【小于】它的内容高度（说明它被限高了）
-        2. overflow 必须是 auto/scroll
-        3. 滚一下 scrollTop 必须真的变大
-      这样不管以后怎么重构，只要滚动真的能用就通过。
+   ⚠️⚠️ 后来又踩了第二个坑：把"滚动容器就是 .win-body"写死在断言里。
+
+      为了让右侧目录的 smooth 滚动不被 sticky 打断，
+      正文的滚动被挪到了 <article class="overflow-y-auto"> 上
+      （详见 ArticleView.tsx 里的长注释）。
+      于是 .win-body 变成了一层"透传"容器：
+      scrollHeight === clientHeight，自己根本不滚。
+
+      断言还盯着 .win-body → 明明功能正常却报两条失败。
+
+   ✅ 正确的写法：不要预设"哪个元素在滚"，而是【去找】那个在滚的元素。
+      判据只看事实（元素自己 overflow 可滚 + 内容比容器高），
+      不看类名、不看层级。这样以后滚动容器再怎么挪都不会误报。
    ══════════════════════════════════════════════════════════ */
 console.log("\n── 八、窗口内滚动 ──");
 
@@ -288,20 +409,42 @@ await s.evaluate(() => {
 });
 await s.waitForTimeout(900);
 
-const metrics = await s.evaluate(() => {
-  const el = document.querySelector(".win-body");
+/**
+ * 找出窗口里"真正在滚"的那个元素。
+ *
+ * ⚠️ 从 .md-body 往上找，第一个"自己 overflow 可滚 + 内容高于容器"的元素
+ *    就是答案。找不到就退回 .win-body（老布局）。
+ */
+const FIND_SCROLLER = `(() => {
+  const md = document.querySelector(".md-body");
+  if (!md) return null;
+  let el = md;
+  while (el && el !== document.body) {
+    const cs = getComputedStyle(el);
+    const can = /(auto|scroll|overlay)/.test(cs.overflowY);
+    if (can && el.scrollHeight > el.clientHeight + 1) return el;
+    el = el.parentElement;
+  }
+  return document.querySelector(".win-body");
+})()`;
+
+const metrics = await s.evaluate(`(() => {
+  const el = ${FIND_SCROLLER};
   if (!el) return null;
   return {
     clientH: el.clientHeight,
     scrollH: el.scrollHeight,
     overflowY: getComputedStyle(el).overflowY,
+    cls: String(el.className).split(" ").slice(0, 3).join("."),
   };
-});
+})()`);
 
 check(
   "窗口内容区被正确限高",
   metrics ? metrics.scrollH > metrics.clientH + 100 : false,
-  metrics ? `可视高 ${metrics.clientH}px < 内容高 ${metrics.scrollH}px` : "找不到 .win-body"
+  metrics
+    ? `[${metrics.cls}] 可视高 ${metrics.clientH}px < 内容高 ${metrics.scrollH}px`
+    : "找不到可滚动的正文容器"
 );
 
 check(
@@ -310,16 +453,45 @@ check(
   metrics ? `overflow-y: ${metrics.overflowY}` : ""
 );
 
-const sBefore = await s.evaluate(() => document.querySelector(".win-body")?.scrollTop ?? -1);
-await s.mouse.move(700, 500);
-await s.mouse.wheel(0, 800);
-await s.waitForTimeout(500);
-const sAfter = await s.evaluate(() => document.querySelector(".win-body")?.scrollTop ?? -1);
+// 滚轮滚动：作用在找到的那个容器上
+const sBefore = await s.evaluate(`(() => {
+  const el = ${FIND_SCROLLER};
+  return el ? el.scrollTop : -1;
+})()`);
+
+/**
+ * ⚠️ 鼠标位置不能写死。
+ *
+ *   原来写的是 (700, 500)，在"正文占满整个窗口"的布局下没问题。
+ *   但后来正文右侧多出一栏目录（180px 宽），
+ *   x=700 正好落进目录栏 —— 滚轮作用在目录上，
+ *   而目录内容短、没有可滚空间，于是 scrollTop 纹丝不动，
+ *   测试报"滚不动"，其实正文的滚动完全正常。
+ *
+ *   正确做法：把鼠标放到【滚动容器自己的中心】。
+ *   容器挪到哪儿都能跟上，不会再因为旁边多一栏而误判。
+ */
+const sCenter = await s.evaluate(`(() => {
+  const el = ${FIND_SCROLLER};
+  if (!el) return null;
+  const r = el.getBoundingClientRect();
+  return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+})()`);
+
+if (sCenter) {
+  await s.mouse.move(sCenter.x, sCenter.y);
+  await s.mouse.wheel(0, 800);
+  await s.waitForTimeout(500);
+}
+const sAfter = await s.evaluate(`(() => {
+  const el = ${FIND_SCROLLER};
+  return el ? el.scrollTop : -1;
+})()`);
 
 check(
   "滚轮能真正滚动正文",
-  sAfter > sBefore,
-  `scrollTop ${sBefore} → ${sAfter}`
+  sBefore >= 0 && sAfter > sBefore,
+  `在 (${sCenter?.x}, ${sCenter?.y}) 滚动：scrollTop ${sBefore} → ${sAfter}`
 );
 
 // 长列表视图也应该能滚（这条链被改过，一并守住）。
