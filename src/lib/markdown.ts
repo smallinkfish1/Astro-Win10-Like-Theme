@@ -545,9 +545,27 @@ export interface ClientPost {
  *    写成白名单而不是"排除 entry"，是为了以后 Post 加字段时
  *    默认不会被传到客户端 —— 白名单只会漏传（看得见），
  *    黑名单只会多传（看不见，体积悄悄变大）。
+ *
+ * ── withRaw：为什么它是个显式开关，而不是默认带上？ ──
+ *
+ *    body 已经是 Markdown 全文了，raw 看着像"重复了一遍"。
+ *    但两者用途不同：
+ *      body → 交给 marked / Astro 去【渲染】
+ *      raw  → 原样显示给用户看（回收站要展示 .md 源码，含未渲染的 LaTeX）
+ *
+ *    ⚠️ 为什么不让回收站直接用 body？
+ *       因为 body 是「frontmatter 之后的正文」，而回收站要的是
+ *       「这篇文章的源码长什么样」。这两个在当前实现下恰好相同，
+ *       但把它们混为一谈，以后 body 一旦被后处理（比如 LaTeX 归一化），
+ *       回收站就会跟着被改掉 —— 而它要的恰恰是【未经处理】的原文。
+ *       所以 raw 单独存一份，语义上更准确。
+ *
+ *    ⚠️⚠️ 只有「回收站」这条路径传 withRaw: true。
+ *       「此电脑」用不到它，而草稿正文可能几百 KB，
+ *       全量传给岛屿就是白白撑大首屏 JSON。
  */
-export function toClientPost(p: Post): ClientPost {
-  return {
+export function toClientPost(p: Post, opts: { withRaw?: boolean } = {}): ClientPost {
+  const out: ClientPost = {
     slug: p.slug,
     title: p.title,
     description: p.description,
@@ -557,11 +575,24 @@ export function toClientPost(p: Post): ClientPost {
     body: p.body,
     accent: p.accent,
   };
+
+  /*
+    ⚠️ 这里没有写 raw: undefined，而是「只在需要时才赋值」。
+       区别在于 JSON 序列化：{ raw: undefined } 会被 stringify 丢掉，
+       但对象字面量里留着一个值为 undefined 的键，
+       astro check 和读代码的人都要多想一秒"它到底传没传"。
+       条件赋值把这件事说得更直白。
+  */
+  if (opts.withRaw) {
+    out.raw = p.body;
+  }
+
+  return out;
 }
 
 /** 批量转换，顺手按日期倒序 */
-export function toClientPosts(posts: Post[]): ClientPost[] {
-  return posts.map(toClientPost);
+export function toClientPosts(posts: Post[], opts: { withRaw?: boolean } = {}): ClientPost[] {
+  return posts.map((p) => toClientPost(p, opts));
 }
 
 /**

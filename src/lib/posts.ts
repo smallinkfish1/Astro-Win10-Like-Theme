@@ -106,6 +106,29 @@ export async function getPosts(includeDrafts = false): Promise<Post[]> {
 }
 
 /**
+ * 取全部草稿（frontmatter 里 draft: true 的文章）。
+ *
+ * ⚠️ 草稿【不单独放一个目录】，就和正式文章住在一起，
+ *    靠 frontmatter 的 draft 字段区分。所以这个函数本质上
+ *    就是 getPosts(true) 再筛一遍。
+ *
+ *    为什么还要单独包一个函数，而不是让调用方自己写？
+ *    因为「哪些算草稿」是一条业务规则，不是一次查询。
+ *    现在它等于 `p.draft === true`，但以后可能要加条件
+ *    （比如「超过 90 天的草稿自动归档」）。
+ *    规则散在各个页面里，改一次要翻遍全站；
+ *    收在这里，改一处就够。
+ *
+ * ⚠️ draft 字段在 schema 里是 z.boolean().default(false)，
+ *    所以【没写 draft 的文章拿到的是 false】——
+ *    调用方不需要判 undefined。
+ */
+export async function getDrafts(): Promise<Post[]> {
+  const all = await getPosts(true);
+  return all.filter((p) => p.draft);
+}
+
+/**
  * 渲染一篇文章的正文（Astro 侧）。
  *
  * 单独包一层而不是在页面里直接调 render()，是为了让「渲染」这件事

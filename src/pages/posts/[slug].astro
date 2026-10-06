@@ -17,9 +17,20 @@ import { toClientPost, formatDate, readingTime } from "../../lib/markdown";
  *   ...
  * 每份 HTML 里都有【完整的正文】，不依赖任何 JavaScript。
  */
+/**
+ * ⚠️⚠️ 草稿要不要生成静态页？要。
+ *     因为它让你能把预览链接直接发给朋友看。
+ *
+ *     但【能打开】不等于【该被收录】—— 所以下面给草稿传了
+ *     noindex，再加上 robots.txt 的 Disallow，
+ *     以及它不进 sitemap / RSS / 搜索索引，
+ *     四个方向合起来才是完整的"不外泄"。
+ *
+ *     为什么用 getPosts(true)？因为要包含草稿。
+ *     ⚠️ 这里传 true 是【故意的】，别顺手改成 false ——
+ *        改了就再也没有草稿预览页了。
+ */
 export async function getStaticPaths() {
-  // 包含草稿：草稿也该有静态页（方便自己分享预览链接），
-  // 只是它不会出现在列表/归档/标签页/搜索索引里
   const posts = await getPosts(true);
   return posts.map((post) => ({
     params: { slug: post.slug },
@@ -49,26 +60,39 @@ const related = all
   .slice(0, 3);
 ---
 
-<ContentLayout title={post.title} description={post.description} canonical={`/posts/${post.slug}`}>
+<ContentLayout
+  title={post.title}
+  description={post.description}
+  canonical={`/posts/${post.slug}`}
+  noindex={post.draft}
+>
   <article>
     {/*
       ── 结构化数据 ──
       给搜索引擎的 Article schema，让搜索结果能显示作者、日期、标题。
       这一段必须和可见正文一致，否则会被判为作弊。
+
+      ⚠️ 草稿【不输出】这段结构化数据。
+         因为 noindex 是"请求别收录"，而结构化数据是"主动描述这是什么内容"——
+         给一个已经声明 noindex 的页面再加 BlogPosting 标记，
+         等于一边关门一边递名片，语义自相矛盾。
+         有些爬虫会优先信结构化数据，那样 noindex 就可能被忽略。
     */}
-    <script
-      type="application/ld+json"
-      set:html={JSON.stringify({
-        "@context": "https://schema.org",
-        "@type": "BlogPosting",
-        headline: post.title,
-        description: post.description,
-        datePublished: post.pubDate,
-        dateModified: post.updatedDate ?? post.pubDate,
-        keywords: post.tags.join(", "),
-        articleSection: post.category,
-      })}
-    />
+    {!post.draft && (
+      <script
+        type="application/ld+json"
+        set:html={JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "BlogPosting",
+          headline: post.title,
+          description: post.description,
+          datePublished: post.pubDate,
+          dateModified: post.updatedDate ?? post.pubDate,
+          keywords: post.tags.join(", "),
+          articleSection: post.category,
+        })}
+      />
+    )}
 
     {/* ── 文章头 ── */}
     <header>

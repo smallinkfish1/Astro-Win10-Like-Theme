@@ -2,7 +2,51 @@ import { create } from "zustand";
 
 /** 一个窗口实例的完整状态 */
 export interface WinState {
-  /** 唯一标识，同时用作任务栏按钮的 key */
+  /**
+   * 【稳定身份】窗口被创建时分配一次，此后【永不改变】。
+   *
+   * ⚠️⚠️ 这个字段的存在是为了修一个真实的 bug，删掉会立刻复发，别动它。
+   *
+   *   背景：`id` 是可以【原地变更】的 ——
+   *     控制面板点左侧分类时，窗口 id 从 control:appearance
+   *     变成 control:about（同一次操作里原地改，不新建窗口）。
+   *     这是需求明确要求的（"不要新开窗口"）。
+   *
+   *   问题：WindowManager 里是
+   *       <AnimatePresence>{windows.map(w => <Window key={w.id} …/>)}</AnimatePresence>
+   *     AnimatePresence 判断"子元素是否还在"靠的就是这个 key。
+   *     id 一变，它的视角里就是「旧 key（control:appearance）消失了，
+   *     新 key（control:about）出现了」—— 于是它给【同一个窗口】
+   *     启动了退出动画（缩小 + 淡出），同时又挂了一个进场动画。
+   *
+   *   症状（很难查，因为要卡在动画进行中的几百毫秒里操作）：
+   *     · 在动画播完前点了右上角关闭 → 任务栏按钮消失了，
+   *       但窗口还画在屏幕上；
+   *     · 拖那个残留窗口，松手后会弹回原位 ——
+   *       因为它的 onDragStop 调 move(id, …)，而那个 id 在 store 里
+   *       已经不存在了，写不进去；Rnd 是受控组件，
+   *       下一帧又按 store 里的旧坐标渲染回来。
+   *
+   *   修法：另给一个创建后不再变的 uid，让 AnimatePresence 用 uid 当 key。
+   *     这样切分类时 key 不变 → AnimatePresence 认为"还是同一个窗口"
+   *     → 不会误播退出动画 → 也就没有僵尸节点。
+   *
+   *   ⚠️ 那"切分类后右侧内容换了"这件事靠什么触发？
+   *      靠 id 变 → renderContent(id) 返回不同组件。
+   *      AnimatePresence 的 key 和内容刷新是【两件事】，可以分开。
+   */
+  uid: string;
+
+  /**
+   * 业务标识，用于查找和去重。可以原地变更。
+   *
+   * 约定（见 WindowManager.renderContent）：
+   *   pc / notepad / browser / recycle / tags / about / posts  固定视图
+   *   post:<slug>        文章阅读视图
+   *   notepad:<slug>     用记事本外壳打开某篇
+   *   control:<分类>     控制面板的某个分类
+   *   tag:<名> / category:<名>  筛选视图
+   */
   id: string;
   /** 标题栏显示的文字 */
   title: string;
@@ -127,6 +171,29 @@ function nextPosition(count: number) {
   return { x: base + offset, y: base + offset };
 }
 
+/**
+ * 生成窗口的稳定 uid。
+ *
+ * ⚠️ 为什么用自增计数器，而不是 Math.random() 或 crypto.randomUUID()？
+ *
+ *   1. 可读性。uid 会出现在 DOM 的 data 属性和调试输出里，
+ *      "win-3" 比 "a3f9c1e2-…" 好认得多。
+ *   2. 服务端渲染安全。Math.random() 在 SSR 和客户端会得到不同值，
+ *      导致 hydration mismatch 警告；自增计数器在 React 树里是稳定的。
+ *   3. 唯一性够用。窗口是单会话的东西，数量顶天几十个，
+ *      不存在跨会话碰撞的问题 —— 不需要 UUID 那种强度。
+ *
+ * ⚠️ 计数器放在模块作用域，而不是 store 的 state 里。
+ *    放进 state 的坏处：它会被当成"需要渲染的数据"，
+ *    每次 +1 都触发一轮订阅者的重渲染 —— 但它其实没人订阅。
+ *    模块作用域的量，改了不通知任何人，正是我们想要的。
+ */
+let uidSeq = 0;
+function nextUid() {
+  uidSeq += 1;
+  return `win-${uidSeq}`;
+}
+
 export const useWindowStore = create<WindowStore>((set, get) => ({
   windows: [],
   topZ: 10,
@@ -175,6 +242,10 @@ export const useWindowStore = create<WindowStore>((set, get) => ({
       windows: [
         ...state.windows,
         {
+          // ⚠️ uid 只在这一行生成一次，之后任何地方都不许改它。
+          //    它是 AnimatePresence 的 key，改了就等于"换了个窗口"，
+          //    会重新触发进场/退场动画 —— 正是我们要消灭的那个 bug。
+          uid: nextUid(),
           id: p.id,
           title: p.title,
           icon: p.icon,

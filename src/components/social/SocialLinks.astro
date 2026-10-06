@@ -1,0 +1,107 @@
+---
+import { SOCIALS, isExternal, socialIconSrc, type SocialLink } from "../../config/site";
+
+/**
+ * 「找到我」的社交链接网格 —— 静态页版。
+ *
+ * ── 为什么单独抽一个组件，而不是在 about.astro 里直接写 ──
+ *
+ *   这套东西在【三个】地方都要出现：
+ *     ① 静态「关于」页（就是本文件，Astro 组件，构建期出 HTML）
+ *     ② 窗口版「关于」视图（AboutView.tsx，React）
+ *     ③ 浏览器窗口的「找到我」（BrowserView.tsx，React）
+ *
+ *   ①②③ 是两套渲染体系（Astro 模板 / React JSX），没法共用同一个
+ *   组件文件。但「一行链接长什么样」这件事必须一致 ——
+ *   否则会出现"主页上图标是圆的，窗口里是方的"这种漂移。
+ *
+ *   所以做法是：三处各写一份【很薄】的渲染，但
+ *     · 数据全部来自 src/config/site.ts（唯一真值）
+ *     · 样式类名全部来自 global.css 里的 .social-* （唯一真值）
+ *   组件里只有"怎么摆"，没有"长什么样"，漂移就无从发生。
+ *
+ * ⚠️ 目标属性这样定：
+ *     外链（http…）  → target="_blank" + rel="noopener noreferrer"
+ *     站内（/rss.xml）→ 不加 target，留在当前标签页
+ *   一起无脑加 target="_blank" 的话，点「RSS 订阅」会弹个新标签页
+ *   显示一堆 XML —— 体验很差。
+ *
+ * ⚠️ rel 里必须带 noreferrer（在 noopener 之外）。
+ *    noopener 是防 window.opener 被对面篡改（钓鱼常用手法），
+ *    只有现代浏览器认；noreferrer 是老浏览器的兜底，
+ *    顺便还能避免把"你从哪个站来的"告诉对方。
+ */
+
+interface Props {
+  /** 只显示这些平台（按名字匹配）。不传就显示全部 */
+  only?: string[];
+  /** 网格最多几列。默认 2 */
+  cols?: 1 | 2 | 3;
+}
+
+const { only, cols = 2 } = Astro.props;
+
+const list: SocialLink[] = SOCIALS.filter(
+  (s) => !s.hidden && s.name && s.href && (!only || only.includes(s.name)),
+);
+
+/**
+ * ⚠️ 用【查表】而不是拼字符串 `grid-cols-${cols}`。
+ *    Tailwind 是在构建期扫源码找类名的，它看不懂运行时拼出来的字符串 ——
+ *    `grid-cols-3` 这个类名在源码里从没出现过，就不会被生成，
+ *    结果运行时这个类【存在但没有样式】。安静地失效，最难查。
+ *    查表能保证三个类名都以完整字面量的形式出现在源码里。
+ */
+const GRID: Record<number, string> = {
+  1: "grid-cols-1",
+  2: "grid-cols-1 sm:grid-cols-2",
+  3: "grid-cols-1 sm:grid-cols-3",
+};
+const gridClass = GRID[cols] ?? GRID[2];
+---
+
+<div class={`social-grid grid gap-3 ${gridClass}`}>
+  {
+    list.map((s) => {
+      const src = socialIconSrc(s);
+      const ext = isExternal(s.href);
+      return (
+        <a
+          href={s.href}
+          target={ext ? "_blank" : undefined}
+          rel={ext ? "noopener noreferrer" : undefined}
+          class="social-card"
+          title={`${s.name}${s.note ? " · " + s.note : ""}`}
+        >
+          {/* 图标区：有图用图，没图就退回一个方块首字母，绝不出现空白 */}
+          {src ? (
+            <span class="social-icon" style={s.bg ? `background:${s.bg}` : undefined}>
+              <img src={src} alt="" width="18" height="18" loading="lazy" decoding="async" />
+            </span>
+          ) : (
+            <span class="social-icon social-icon-fallback" aria-hidden="true">
+              {s.name.slice(0, 1)}
+            </span>
+          )}
+
+          <span class="social-name">{s.name}</span>
+
+          {s.note && <span class="social-note">{s.note} ↗</span>}
+        </a>
+      );
+    })
+  }
+</div>
+
+{
+  /* 占位提醒：只在配置里还有没改过的示例地址时才出现。
+     判断依据是 href 恰好等于平台首页（没有带用户名）——
+     只要你去掉了结尾的空格、填上自己的 ID，提示就自动消失。
+     这比"写在文档里让你记得删"可靠，因为它长在页面上。 */
+  list.some((s) => /^https?:\/\/(github\.com|x\.com|twitter\.com|www\.youtube\.com\/@|discord\.com\/users|space\.bilibili\.com)\/?$/.test(s.href)) && (
+    <p class="social-hint">
+      ℹ️ 上面有链接还是占位的示例地址。去 <code>src/config/site.ts</code> 把{" "}
+      <code>href</code> 换成你自己的主页即可 —— 那个提示会自动消失。
+    </p>
+  )
+}

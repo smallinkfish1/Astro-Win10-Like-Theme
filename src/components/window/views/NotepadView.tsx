@@ -105,6 +105,7 @@ function buildFrontmatter(a: ClientPost): string {
 export default function NotepadView({
   posts,
   slug: initialSlug,
+  onlySource = false,
 }: {
   posts: ClientPost[];
   /**
@@ -119,6 +120,39 @@ export default function NotepadView({
    * ⚠️ 不传时（比如双击桌面上的记事本图标）走随机。
    */
   slug?: string;
+
+  /**
+   * 「只读源码」模式 —— 回收站双击草稿时用。
+   *
+   * ⚠️⚠️ 打开它之后，这个窗口【只能看 .md 原文】：
+   *
+   *   · 强制源码视图，且无法切换（F9 无效、菜单项置灰、状态栏按钮不可点）
+   *   · textarea 只读
+   *   · 视图模式【不写入 localStorage】
+   *
+   * ── 为什么视图模式不能写 localStorage？ ──
+   *
+   *   这是个很容易踩的坑。设想：
+   *     用户平时爱看渲染视图（localStorage 存着 "rendered"）
+   *     → 从回收站双击一个草稿
+   *     → 如果这个窗口也去写 localStorage，就会把用户的选择覆盖成 "source"
+   *     → 下次他正常打开一篇文章，发现变成源码了，一脸茫然
+   *
+   *   ⚠️ 更隐蔽的是反向情况：
+   *     如果这里【读】localStorage，那用户在别处选了渲染视图，
+   *     回收站里打开草稿就会显示渲染后的 HTML ——
+   *     完全违背"看原始字符"的初衷，而且看起来像 bug。
+   *
+   *   所以这个模式下：既不解锁渲染视图，也不碰持久化。
+   *   它的视图状态是【完全本地、完全受控】的。
+   *
+   * ── 为什么不用一个独立的组件？ ──
+   *
+   *   因为 90% 的逻辑（菜单栏、字号、自动换行、行列号、切换文章）
+   *   和普通记事本完全一样。复制一个组件出来，
+   *   以后修任何一个 bug 都得改两遍 —— 而且很容易只改一遍。
+   */
+  onlySource?: boolean;
 }) {
   /**
    * 当前在读的文章。
@@ -151,8 +185,31 @@ export default function NotepadView({
    *
    * ⚠️ 初始值从 localStorage 读（上次的选择），默认渲染视图 ——
    *    打开文章的第一诉求是"读"，不是"看语法"。
+   *
+   * ⚠️⚠️ onlySource 模式下【跳过 localStorage，强制源码视图】。
+   *    因为：
+   *      1. 从 localStorage 读 → 用户平时选了渲染视图，这里就会渲染 HTML，
+   *         完全违背"看原始字符"的初衷
+   *      2. 后面那个写回 localStorage 的 effect 也必须一起跳过 ——
+   *         否则会把用户的选择覆盖成 "source"，
+   *         下次他正常打开文章就莫名变成源码视图了
+   *
+   *    所以惰性初始化这里直接短路成 false（= 源码视图）。
    */
-  const [rendered, setRendered] = useState(getSavedRendered);
+  const [rendered, setRendered] = useState(() => (onlySource ? false : getSavedRendered()));
+
+  /**
+   * 统一切换视图的入口。
+   *
+   * ⚠️ 为什么不直接在各处调 setRendered？
+   *    因为 onlySource 模式要拦截它 —— 拦截点只有一个才安全。
+   *    F9、查看菜单、状态栏按钮三个入口如果各自判断一遍
+   *    "我现在是不是只读模式"，迟早漏一个。
+   */
+  const toggleRendered = (next?: boolean) => {
+    if (onlySource) return;
+    setRendered((v) => next ?? !v);
+  };
 
   /**
    * 外面换了文章时（比如从 /posts/foo 直接进站，然后又在同一个
@@ -203,11 +260,21 @@ export default function NotepadView({
    *    靠人肉在每个入口都记得存一次，迟早漏一个 ——
    *    而且漏的表现很隐蔽（"用菜单切能记住，按 F9 切就记不住"）。
    *    挂在状态上，所有入口自动一致。
+   *
+   * ⚠️⚠️ onlySource 模式下【直接跳过】。
+   *    因为这个模式下的 rendered 恒为 false，如果不跳过，
+   *    每个回收站窗口一打开就会把用户的全局偏好写成 "source" ——
+   *    下次他正常打开一篇文章，发现莫名其妙变成源码视图了。
+   *
+   *    ⚠️ 这是个「就地污染用户设置」的 bug：从回收站点一次草稿，
+   *       就永久改掉了另一个窗口的默认行为。而且两者看起来毫无关系，
+   *       排查时几乎想不到是这里干的。
    */
   useEffect(() => {
+    if (onlySource) return;
     if (typeof localStorage === "undefined") return;
     localStorage.setItem(KEY_NOTEPAD_VIEW, rendered ? "rendered" : "source");
-  }, [rendered]);
+  }, [rendered, onlySource]);
 
   /** 点菜单外部就收起。用 pointerdown 而不是 click，手感更跟手 */
   useEffect(() => {
@@ -252,6 +319,11 @@ export default function NotepadView({
    * ⚠️ 只在【这个记事本窗口有焦点】时生效。
    *    判断方式是看事件源在不在当前容器的 DOM 里 ——
    *    否则用户在别的窗口里按 F9 也会把记事本切了，很怪。
+   *
+   * ⚠️⚠️ onlySource 模式下【直接 return】。
+   *    光靠"菜单项置灰"是不够的 —— 快捷键是绕过 UI 的后门。
+   *    用户按了没反应会以为是坏了，但总比"能绕过只读限制"好。
+   *    置灰 + 快捷键无效，两处都堵上。
    */
   const rootRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -260,11 +332,13 @@ export default function NotepadView({
       // 事件源不在本窗口内 → 忽略
       if (!rootRef.current?.contains(e.target as Node)) return;
       e.preventDefault();
+      // 只读源码模式：吃掉这次按键，但什么也不做
+      if (onlySource) return;
       setRendered((v) => !v);
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, []);
+  }, [onlySource]);
 
   if (!article) {
     return (
@@ -326,16 +400,27 @@ export default function NotepadView({
           ── 视图切换 ──
           Win10 记事本没有这个功能，但这里是"读博客"不是"写 txt"，
           所以加了它。放在最上面是因为它是最常用的那一项。
+
+          ⚠️⚠️ onlySource 模式下这两项【置灰但不隐藏】。
+             为什么置灰而不是干脆隐藏：
+               隐藏的后果是"用户根本不知道有渲染视图这回事"，
+               下次他在别处看到别的窗口能切，会觉得这里坏了。
+               灰掉则是"有这么个东西，但当前不能用"——
+               这和控制面板里未实现的分类是同一个思路。
+
+             ⚠️ 置灰靠的是给 run 传 undefined（菜单项渲染逻辑里
+                `disabled={!it.run}`）。所以这里必须把 run 拿掉，
+                光加个 disabled 字段是没用的。
         */
         {
           label: "渲染视图  (F9)",
           check: rendered,
-          run: () => setRendered(true),
+          run: onlySource ? undefined : () => setRendered(true),
         },
         {
           label: "源码视图 .md 原文  (F9)",
           check: !rendered,
-          run: () => setRendered(false),
+          run: onlySource ? undefined : () => setRendered(false),
         },
         { label: "—" },
         { label: "上一篇", run: () => goto(-1) },
@@ -461,7 +546,14 @@ export default function NotepadView({
           <div className="md-body" dangerouslySetInnerHTML={{ __html: html }} />
         </div>
       ) : (
-        /* 源码视图：真的用 textarea，才有"记事本"的编辑手感 */
+        /*
+          源码视图：真的用 textarea，才有"记事本"的编辑手感。
+
+          ⚠️ readOnly 是【一直】为 true 的，不是只有 onlySource 才加 ——
+             这个窗口的定位是"读文件"，编辑了也存不回去，
+             给一个能打字的框是在骗用户。
+             回收站那条路径只是额外锁定了视图模式而已。
+        */
         <textarea
           ref={areaRef}
           value={text}
@@ -478,7 +570,17 @@ export default function NotepadView({
             whiteSpace: wrap ? "pre-wrap" : "pre",
             overflowX: wrap ? "hidden" : "auto",
           }}
-          aria-label={`${article.title} 的 Markdown 原文`}
+          /*
+            ⚠️ aria-label 区分两种模式。
+               读屏用户听到"草稿原文（只读）"就知道这是个快照，
+               而不是一个可以编辑但没反应的表单 ——
+               后者会让人以为页面卡住了。
+          */
+          aria-label={
+            onlySource
+              ? `${article.title} 的 Markdown 原文（只读）`
+              : `${article.title} 的 Markdown 原文`
+          }
         />
       )}
 
@@ -503,17 +605,46 @@ export default function NotepadView({
         )}
 
         <span className={rendered ? "ml-auto shrink-0" : "shrink-0"}>
-          {/* 视图模式给个明确提示，免得用户以为公式渲染不了 */}
+          {/*
+            视图模式给个明确提示，免得用户以为公式渲染不了。
+
+            ⚠️⚠️ onlySource 模式下这个按钮【禁用】。
+               它是第三个能切换视图的入口（另两个是 F9 和查看菜单），
+               三个入口必须同时堵上 —— 漏一个，只读限制就被绕过去了。
+
+               ⚠️ 这里用 disabled 属性 + 保留原文字，
+                  而不是把按钮换成一个静态 span：
+                  按钮变灰能传达"本来能点"，静态文字不能。
+          */}
           <button
             type="button"
-            onClick={() => setRendered((v) => !v)}
+            onClick={() => toggleRendered()}
+            disabled={onlySource}
             className="no-drag rounded px-1.5 py-0.5 transition-colors hover:bg-[var(--hover)]
-                       hover:text-[var(--accent)]"
-            title="切换渲染视图 / 源码视图"
+                       hover:text-[var(--accent)] disabled:cursor-default
+                       disabled:hover:bg-transparent disabled:hover:text-[var(--fg-dim)]"
+            title={onlySource ? "回收站里的草稿只能查看源码" : "切换渲染视图 / 源码视图"}
           >
             {rendered ? "渲染视图" : "源码视图"}
           </button>
         </span>
+
+        {/*
+          ⚠️ 只读标记。
+             用户会好奇"为什么这个框不能打字" —— 与其让他猜，
+             不如直接写出来。这也是和普通记事本最大的区别。
+
+             ⚠️ 只在 onlySource 下显示，普通记事本本来就不需要解释。
+        */}
+        {onlySource && (
+          <span
+            className="shrink-0 rounded bg-[var(--surface-3)] px-1.5 py-px text-[10px]
+                       text-[var(--fg-faint)]"
+            title="草稿是未完成的内容，这里只展示原始文件"
+          >
+            只读
+          </span>
+        )}
 
         {!rendered && (
           <span className="shrink-0 text-[var(--fg-faint)]">

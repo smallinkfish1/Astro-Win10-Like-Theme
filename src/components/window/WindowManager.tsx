@@ -2,6 +2,7 @@ import { useEffect, useCallback } from "react";
 import { AnimatePresence } from "motion/react";
 import { useWindowStore } from "../../store/windowStore";
 import type { ClientPost } from "../../lib/markdown";
+import type { Guide } from "../../lib/guide";
 import {
   DEFAULT_SETTINGS_SECTION,
   findSection,
@@ -66,6 +67,8 @@ export interface WindowManagerProps {
   tags: TagInfo[];
   categories: TagInfo[];
   stats: AboutStats;
+  /** 「使用教程」标签页的内容，来自 src/content/guide/*.md */
+  guides: Guide[];
 }
 
 /** 文章窗口用的大尺寸：文章是要读的，不是要瞥一眼的 */
@@ -92,6 +95,7 @@ export default function WindowManager({
   tags,
   categories,
   stats,
+  guides,
 }: WindowManagerProps) {
   const windows = useWindowStore((s) => s.windows);
   const open = useWindowStore((s) => s.open);
@@ -131,9 +135,9 @@ export default function WindowManager({
         // 记事本（不带 slug）→ 随机挑一篇
         case "notepad":
           return <NotepadView posts={posts} />;
-        // 浏览器 → 友情链接 / 找到我
+        // 浏览器 → 友情链接 / 找到我 / 使用教程
         case "browser":
-          return <BrowserView />;
+          return <BrowserView guides={guides} />;
         // 回收站 → 草稿箱
         case "recycle":
           return <DraftsView posts={drafts} />;
@@ -156,6 +160,12 @@ export default function WindowManager({
       /**
        * ── 记事本打开某篇：id 形如 notepad:why-win10 ──
        *
+       * ⚠️ 这里打开的是【普通】记事本（可以切渲染视图）。
+       *
+       *    只读源码模式（回收站用的那个）走的是另一条分支，
+       *    见下面 draft: 的说明 —— 两者刻意分成两个 id 前缀，
+       *    因为它们在任务栏上应该是两个可以同时存在的窗口。
+       *
        * ⚠️⚠️ 这个分支必须放在 post: 分支【之前】判断吗？
        *    不必须，两者的前缀不同不会互相吃掉。
        *    但顺序上先写更具体的（带冒号）是个好习惯 ——
@@ -173,6 +183,50 @@ export default function WindowManager({
           );
         }
         return <NotepadView posts={posts} slug={slug} />;
+      }
+
+      /**
+       * ── 只看源码的记事本：id 形如 source:formula-draft ──
+       *
+       * 「回收站」双击草稿走这里。
+       *
+       * ⚠️⚠️ 为什么用【独立的 id 前缀】，而不是给 notepad: 加个参数？
+       *
+       *   因为 id 决定了"这是不是同一个窗口"。
+       *   如果草稿也用 notepad:<slug>，那么：
+       *     从回收站双击 formula-draft  → 打开窗口 notepad:formula-draft
+       *     再从此电脑双击同一篇        → 由于 id 相同，
+       *                                   store 会认为是同一个窗口，
+       *                                   直接聚焦而不新建 ——
+       *                                   结果就是你点了个"能切渲染视图"的入口，
+       *                                   却得到上次那个只读窗口
+       *
+       *   用不同前缀，两者就是两个独立窗口，各自的行为不会互相污染。
+       *
+       * ⚠️ 草稿【必须在 drafts 里找】，而且 drafts 里必须带 raw。
+       *    posts 数组里没有草稿（getPosts(false) 会过滤掉），
+       *    所以这里只查 drafts。
+       */
+      if (id.startsWith("source:")) {
+        const slug = id.slice("source:".length);
+        const article = drafts.find((p) => p.slug === slug);
+        if (!article) {
+          return (
+            <div className="grid h-full place-items-center text-[12px] text-[var(--fg-faint)]">
+              找不到草稿：{slug}
+            </div>
+          );
+        }
+        /*
+          ⚠️ posts 传的是【草稿自己】而不是空数组。
+             因为 NotepadView 用 posts 做两件事：找当前文章、以及
+             "上一篇/下一篇/随机换一篇"的候选池。
+             传空数组的话，切换文章的下拉框会是空的，
+             而且 article 查找会 fallback 到 posts[0] = undefined，
+             直接走进"记事本里还没有内容"分支。
+             传 drafts 出去，语义正好是"在草稿之间切换"。
+        */
+        return <NotepadView posts={drafts} slug={slug} onlySource />;
       }
 
       /**
@@ -290,6 +344,31 @@ export default function WindowManager({
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       if (!detail?.slug) return;
+
+      /*
+        ⚠️⚠️ detail.onlySource → 只读源码的记事本（回收站专用）。
+
+           这条分支必须放在 asNotepad 判断【之前】，
+           因为它和"普通记事本"用的是不同的 id 前缀，
+           走同一个 id 会互相吃掉（详见 renderContent 里的说明）。
+
+           path 同步成 /drafts 而不是 /posts：
+           这个窗口是从回收站开出来的，URL 也该指回回收站 ——
+           刷新页面时按路径还原，才会重新打开回收站而不是文章列表。
+      */
+      if (detail.onlySource) {
+        const article = drafts.find((p) => p.slug === detail.slug);
+        open({
+          id: `source:${detail.slug}`,
+          title: `${article?.title ?? detail.title ?? detail.slug}（只读）`,
+          icon: "/icons/notepad.png",
+          path: "/drafts",
+          ...articleSize(),
+        });
+        syncUrl("/drafts");
+        return;
+      }
+
       const asNotepad = detail.view === "notepad";
 
       if (asNotepad) {
@@ -358,10 +437,25 @@ export default function WindowManager({
       if (!panel) return;
 
       const s = findSection(section);
-      // 原地改 id：内容会跟着变，但窗口的几何/层级不动
+      /**
+       * 原地改 id —— 内容会跟着变，但窗口的几何/层级不动。
+       *
+       * ⚠️⚠️ 这里【故意没有】动 uid，这是修复本次 bug 的关键。
+       *
+       *   改 id 是"这个窗口现在显示什么"，会触发右侧内容重渲染；
+       *   不动 uid 是"这个窗口还是刚才那一个"，AnimatePresence
+       *   因此不会误以为"旧窗口关了、新窗口开了"。
+       *
+       *   如果这里顺手把 uid 也改了（比如写成 uid: nextUid()），
+       *   就会回到修之前的状态：切分类时窗口会重播一次开窗动画，
+       *   而且在动画中途关窗会留下关不掉的僵尸节点。
+       *
+       *   ⚠️ 用展开运算符 ...w 就自动保留了 uid。别改成逐个字段列举 ——
+       *      那样以后 store 里加字段，这里就会悄悄漏掉。
+       */
       useWindowStore.setState({
         windows: store.windows.map((w) =>
-          w.id === panel.id ? { ...w, id: `control:${section}`, title: `控制面板 - ${s.name}` } : w
+          w.uid === panel.uid ? { ...w, id: `control:${section}`, title: `控制面板 - ${s.name}` } : w
         ),
       });
 
@@ -570,7 +664,24 @@ export default function WindowManager({
       */}
       <AnimatePresence initial={false}>
         {windows.map((w) => (
-          <Window key={w.id} win={w}>
+          /*
+            ⚠️⚠️ key 必须用 w.uid，【不能】用 w.id。
+
+               id 是会变的（控制面板切分类时原地改），
+               而 key 一变，AnimatePresence 就认为"这是另一个窗口了"：
+                 · 给旧 key 启动退出动画（缩小 + 淡出）
+                 · 给新 key 挂一个进场动画
+               于是同一个窗口同时跑着两套动画。
+
+               症状（难查，要卡在几百毫秒的动画窗口里操作）：
+                 动画没播完时点关闭 → 任务栏按钮没了，窗口还画在屏幕上；
+                 拖那个残留窗口会弹回原位。
+
+               换成创建后永不改变的 uid，切分类时 key 不变，
+               AnimatePresence 就不会误判 —— 右侧内容照样会刷新，
+               那是由 renderContent(w.id) 驱动的，和 key 是两回事。
+          */
+          <Window key={w.uid} win={w}>
             {renderContent(w.id)}
           </Window>
         ))}

@@ -1,10 +1,21 @@
 ---
 import ContentLayout from "../layouts/ContentLayout.astro";
+import SocialLinks from "../components/social/SocialLinks.astro";
 import { getStats, getPosts } from "../lib/posts";
 import { formatDate } from "../lib/markdown";
+import { PROFILE, resolveAvatar } from "../config/site";
 
 const stats = await getStats();
 const latest = (await getPosts(false)).slice(0, 5);
+
+/**
+ * 头像：优先用配置里的图片（网络或本地），没有才退回 emoji。
+ * ⚠️ resolveAvatar() 返回 string | null，null 表示"没配图"。
+ *    这里不要写成 `resolveAvatar() || PROFILE.emoji || "👤"` ——
+ *    三层兜底要放在一处，不然以后加新优先级会漏改。
+ */
+const avatarSrc = resolveAvatar();
+const avatarEmoji = PROFILE.emoji ?? "👤";
 ---
 
 <ContentLayout
@@ -13,18 +24,29 @@ const latest = (await getPosts(false)).slice(0, 5);
   canonical="/about"
 >
   <div class="mb-8 flex items-start gap-5">
-    <div
-      class="grid h-16 w-16 shrink-0 place-items-center rounded-full text-[28px] text-white"
-      style="background:linear-gradient(135deg,#2b579a,#1b6fb5)"
-    >
-      👤
+    <div class="avatar-box h-16 w-16 text-[28px]">
+      {
+        avatarSrc ? (
+          <img src={avatarSrc} alt={`${PROFILE.name} 的头像`} width="64" height="64" />
+        ) : (
+          <span aria-hidden="true">{avatarEmoji}</span>
+        )
+      }
     </div>
     <div>
-      <h1 class="m-0 text-[24px] font-semibold text-[var(--fg)]">关于这个站</h1>
-      <p class="mt-2 text-[13.5px] leading-relaxed text-[var(--fg-dim)]">
-        一个把博客界面做成 Windows 10 桌面的地方。双击图标开窗口，
-        任务栏切换窗口，开始菜单里是真实的分类和标签。
-      </p>
+      <h1 class="m-0 text-[24px] font-semibold text-[var(--fg)]">{PROFILE.name}</h1>
+      {
+        PROFILE.bio.map((line, i) => (
+          <p
+            class:list={[
+              "text-[13.5px] leading-relaxed text-[var(--fg-dim)]",
+              i === 0 ? "mt-2" : "mt-1.5",
+            ]}
+          >
+            {line}
+          </p>
+        ))
+      }
     </div>
   </div>
 
@@ -137,25 +159,11 @@ const latest = (await getPosts(false)).slice(0, 5);
     <h2 class="mb-4 border-b border-[var(--surface-border)] pb-2 text-[16px] font-semibold text-[var(--fg)]">
       找到我
     </h2>
-    <div class="grid gap-3 sm:grid-cols-2">
-      {
-        [
-          { icon: "🐙", label: "GitHub", href: "https://github.com", note: "源码" },
-          { icon: "📡", label: "RSS", href: "/rss.xml", note: "订阅" },
-          { icon: "✉️", label: "Email", href: "mailto:me@example.com", note: "联系" },
-          { icon: "🗺️", label: "Sitemap", href: "/sitemap.xml", note: "站点地图" },
-        ].map((l) => (
-          <a
-            href={l.href}
-            class="flex items-center gap-3 rounded border border-[var(--surface-border)] bg-[var(--surface)] px-4 py-3 no-underline transition-colors hover:border-[var(--accent)] hover:bg-[var(--surface-2)]"
-          >
-            <span class="text-[17px]">{l.icon}</span>
-            <span class="flex-1 text-[13.5px] text-[var(--fg)]">{l.label}</span>
-            <span class="text-[11.5px] text-[var(--fg-faint)]">{l.note} ↗</span>
-          </a>
-        ))
-      }
-    </div>
+    {/*
+      ⚠️ 数据来自 src/config/site.ts，样式来自 global.css 的 .social-*。
+         想加平台 / 换图标 / 改地址，都只改 site.ts 那一个文件。
+    */}
+    <SocialLinks cols={2} />
   </section>
 
   {/* ── 最近更新 ── */}

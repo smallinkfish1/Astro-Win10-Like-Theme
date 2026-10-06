@@ -1,3 +1,13 @@
+import { useState } from "react";
+import {
+  PROFILE,
+  resolveAvatar,
+  visibleSocials,
+  socialIconSrc,
+  isExternal,
+  type SocialLink,
+} from "../../../config/site";
+
 export interface AboutStats {
   postCount: number;
   categoryCount: number;
@@ -12,36 +22,34 @@ export interface AboutStats {
  * "网络"映射到"关于"是个不那么直观的对应 —— 原始需求里就是这么定的。
  * 从语义上讲它是"通向外部世界的窗口"（GitHub、RSS、邮箱都在这一块），
  * 所以我把它做成一个"站点信息 + 联系方式"的着陆页。
+ *
+ * ⚠️ 头像、昵称、简介、社交链接全部来自 src/config/site.ts，
+ *    这个文件里【没有】任何硬编码的个人信息。
+ *    想改内容请改 site.ts，别改这里 —— 静态「关于」页
+ *    （src/pages/about.astro）读的是同一份数据，改一处两处都变。
  */
 export default function AboutView({ stats }: { stats: AboutStats }) {
   const words = stats.wordCount.toLocaleString("en-US");
-
-  const links = [
-    { icon: "🐙", label: "GitHub", href: "https://github.com", note: "源码" },
-    { icon: "📡", label: "RSS", href: "/rss.xml", note: "订阅" },
-    { icon: "✉️", label: "Email", href: "mailto:me@example.com", note: "联系" },
-    { icon: "🗺️", label: "Sitemap", href: "/sitemap.xml", note: "站点地图" },
-  ];
+  const links = visibleSocials();
+  const avatarSrc = resolveAvatar();
 
   return (
     <div className="flex h-full flex-col gap-5 overflow-y-auto pr-1">
-      {/* ── 头像 + 一句话介绍 ── */}
+      {/* ── 头像 + 简介 ── */}
       <section className="flex items-start gap-4">
-        <div className="grid h-14 w-14 shrink-0 place-items-center rounded-full
-                        bg-gradient-to-br from-[#2b579a] to-[#1b6fb5] text-[24px]
-                        text-white shadow-inner">
-          👤
-        </div>
+        <Avatar src={avatarSrc} emoji={PROFILE.emoji ?? "👤"} className="h-14 w-14 text-[24px]" />
         <div className="min-w-0">
-          <h3 className="mb-1 text-[15px] font-semibold text-[#10151c]">你好，我是站长</h3>
-          <p className="text-[12.5px] leading-relaxed text-[#57606a]">
-            这里是一个把博客做成了 Windows 10 桌面的地方。
-            双击图标开窗口，任务栏切换窗口，开始菜单里是真实的分类和标签。
-          </p>
-          <p className="mt-1.5 text-[12.5px] leading-relaxed text-[#57606a]">
-            界面看起来像个壳，但每一篇文章都有独立的静态页 ——
-            体验归体验，内容归内容。
-          </p>
+          <h3 className="mb-1 text-[15px] font-semibold text-[var(--fg)]">{PROFILE.name}</h3>
+          {PROFILE.bio.map((line, i) => (
+            <p
+              key={i}
+              className={`text-[12.5px] leading-relaxed text-[var(--fg-dim)] ${
+                i === 0 ? "" : "mt-1.5"
+              }`}
+            >
+              {line}
+            </p>
+          ))}
         </div>
       </section>
 
@@ -77,29 +85,17 @@ export default function AboutView({ stats }: { stats: AboutStats }) {
 
       {/* ── 外链 ── */}
       <section>
-        <h4 className="mb-2 text-[12px] font-semibold text-[#16202c]">找到我</h4>
-        <div className="grid grid-cols-2 gap-2">
+        <h4 className="mb-2 text-[12px] font-semibold text-[var(--fg)]">找到我</h4>
+        <div className="social-grid grid grid-cols-2 gap-2">
           {links.map((l) => (
-            <a
-              key={l.label}
-              href={l.href}
-              target="_blank"
-              rel="noreferrer"
-              className="no-drag flex items-center gap-2 rounded border border-[#e8ebef]
-                         px-3 py-2 text-[12.5px] text-[#24292f] no-underline
-                         transition-colors hover:border-[#2b579a] hover:bg-[#f7fafd]"
-            >
-              <span className="text-[15px] leading-none">{l.icon}</span>
-              <span className="flex-1 truncate">{l.label}</span>
-              <span className="text-[10.5px] text-[#98a1ae]">{l.note} ↗</span>
-            </a>
+            <SocialCard key={l.name} s={l} />
           ))}
         </div>
       </section>
 
       {/* ── 技术栈 ── */}
-      <section className="border-t border-[#eceff2] pt-4">
-        <h4 className="mb-2 text-[12px] font-semibold text-[#16202c]">技术栈</h4>
+      <section className="border-t border-[var(--surface-border)] pt-4">
+        <h4 className="mb-2 text-[12px] font-semibold text-[var(--fg)]">技术栈</h4>
         <div className="flex flex-wrap gap-1.5">
           {["Astro", "React", "TypeScript", "Tailwind CSS", "Zustand", "react-rnd", "marked"].map(
             (t) => (
@@ -109,12 +105,102 @@ export default function AboutView({ stats }: { stats: AboutStats }) {
             )
           )}
         </div>
-        <p className="mt-3 text-[11.5px] leading-relaxed text-[#8a94a3]">
+        <p className="mt-3 text-[11.5px] leading-relaxed text-[var(--fg-faint)]">
           静态页由 Astro 在构建期渲染，窗口系统是唯一的 React 岛屿。
-          两边的正文排版共用同一个 <code className="rounded bg-[#eef2f7] px-1">.md-body</code> 类，
+          两边的正文排版共用同一个{" "}
+          <code className="rounded bg-[var(--surface-3)] px-1">.md-body</code> 类，
           所以不会出现"站内两处正文长得不一样"。
         </p>
       </section>
     </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
+   下面是本视图专用的两个小组件
+   ══════════════════════════════════════════════════════════════ */
+
+/**
+ * 头像。
+ *
+ * ⚠️ 有图显示图、没图显示 emoji，但【外面那个圆是一样大的】。
+ *    如果把这两种情况交给两个不同的元素去撑尺寸，
+ *    换头像类型时整个首屏会往下跳一下 —— 很廉价的感觉。
+ *    所以尺寸由 .avatar-box 这个类统一给死，内部只负责填满。
+ */
+function Avatar({
+  src,
+  emoji,
+  className,
+}: {
+  src: string | null;
+  emoji: string;
+  className?: string;
+}) {
+  const [broken, setBroken] = useState(false);
+  /**
+   * ⚠️ 远程头像加载失败时不能留白，要退回 emoji。
+   *    这一步很重要：用户配的是外链图片，
+   *    那个图哪天 404 了，页面上就是一个空圆圈，
+   *    而代码没改过 —— 光看页面完全猜不出原因。
+   *    退回 emoji 至少还是"一个像样的头像"。
+   */
+  const showImg = src && !broken;
+
+  return (
+    <div className={`avatar-box ${className ?? ""}`}>
+      {showImg ? (
+        <img
+          src={src}
+          alt={`${PROFILE.name} 的头像`}
+          loading="lazy"
+          decoding="async"
+          onError={() => setBroken(true)}
+        />
+      ) : (
+        <span aria-hidden="true">{emoji}</span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * 一条社交链接。
+ *
+ * 样式全部来自 global.css 的 .social-card / .social-icon / .social-name，
+ * 这里只负责"什么时候加 target=_blank"。
+ *
+ * ⚠️ 站内路径（/rss.xml、/sitemap.xml）【不加】target="_blank"。
+ *    无脑加的话，点「RSS 订阅」会弹出个新标签页显示一堆 XML，
+ *    把用户的标签栏搞乱。判断逻辑收在 isExternal() 里，
+ *    三处渲染共用同一个判断 —— 不会出现"网页版新开、窗口版不开"。
+ */
+function SocialCard({ s }: { s: SocialLink }) {
+  const src = socialIconSrc(s);
+  const ext = isExternal(s.href);
+  const [broken, setBroken] = useState(false);
+
+  return (
+    <a
+      href={s.href}
+      target={ext ? "_blank" : undefined}
+      rel={ext ? "noopener noreferrer" : undefined}
+      className="social-card no-drag"
+      title={`${s.name}${s.note ? " · " + s.note : ""}`}
+    >
+      {src && !broken ? (
+        <span className="social-icon" style={s.bg ? { background: s.bg } : undefined}>
+          {/* 图标加载失败就退回首字母 —— 空白比一个字母难查得多 */}
+          <img src={src} alt="" width={16} height={16} loading="lazy" onError={() => setBroken(true)} />
+        </span>
+      ) : (
+        <span className="social-icon social-icon-fallback" aria-hidden="true">
+          {s.name.slice(0, 1)}
+        </span>
+      )}
+
+      <span className="social-name">{s.name}</span>
+      {s.note && <span className="social-note">{s.note} ↗</span>}
+    </a>
   );
 }

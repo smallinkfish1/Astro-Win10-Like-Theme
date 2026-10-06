@@ -22,9 +22,37 @@ interface Props {
   description?: string;
   /** 规范链接，避免 /posts/x 和 /posts/x/ 被当成两个页面 */
   canonical?: string;
+  /**
+   * 不收录。
+   *
+   * ⚠️⚠️ 为什么需要一个显式开关，而不是"草稿就别生成静态页"？
+   *
+   *   草稿的静态页是【故意保留】的 —— 你要能把预览链接
+   *   直接发给朋友看。所以它必须存在、必须能打开。
+   *
+   *   但"能打开"和"该被收录"是两件事：
+   *     · 能打开       = 有 URL 就能访问
+   *     · 不该被收录   = 爬虫不应该把它收进索引
+   *
+   *   robots.txt 的 Disallow 只管住"爬虫自己去爬"，
+   *   管不住"别人把你草稿的链接发出去、爬虫顺着外链进来"。
+   *   要覆盖后一种情况，只有 noindex 这条 meta 才行。
+   *
+   *   ⚠️ 所以草稿页必须同时具备：
+   *      Distable /drafts（robots.txt，挡住主动抓取）
+   *      noindex（meta，挡住外链进来的收录）
+   *      不进 sitemap / RSS / 搜索索引（不主动暴露）
+   *   三个都做了，才是完整的"不外泄"。
+   */
+  noindex?: boolean;
 }
 
-const { title, description = "一个 Windows 10 风格的个人博客", canonical } = Astro.props;
+const {
+  title,
+  description = "一个 Windows 10 风格的个人博客",
+  canonical,
+  noindex = false,
+} = Astro.props;
 const site = "https://example.com";
 const currentPath = Astro.url.pathname;
 
@@ -48,6 +76,17 @@ const NAV = [
     <title>{title}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical ? `${site}${canonical}` : `${site}${currentPath}`} />
+
+    {/*
+      ⚠️⚠️ noindex 放在这里，而且必须在 <head> 里。
+         爬虫只认 <head> 中的这条 meta；放到 <body> 里等于没写。
+
+      ⚠️ 值和 robots.txt 的 Disallow 是【互补】关系，不是重复：
+         Disallow 挡"爬虫主动来抓"
+         noindex  挡"外链被人转发后，爬虫顺着进来并收录"
+         缺任何一个，草稿都有被收录的路径。
+    */}
+    {noindex && <meta name="robots" content="noindex, nofollow" />}
 
     {/* ── 社交分享 ── */}
     <meta property="og:type" content="website" />

@@ -3,7 +3,8 @@ import DesktopLayout from "../layouts/DesktopLayout.astro";
 import Desktop from "../components/desktop/Desktop.astro";
 import WindowManager from "../components/window/WindowManager.tsx";
 import Taskbar from "../components/taskbar/Taskbar.tsx";
-import { getPosts, getCategories, getTags, getStats } from "../lib/posts";
+import { getPosts, getDrafts, getCategories, getTags, getStats } from "../lib/posts";
+import { getGuides } from "../lib/guide";
 import { toClientPosts } from "../lib/markdown";
 
 /**
@@ -21,8 +22,28 @@ import { toClientPosts } from "../lib/markdown";
  */
 
 const posts = toClientPosts(await getPosts(false));
-// 草稿单独取一份，给「回收站」窗口用
-const drafts = toClientPosts((await getPosts(true)).filter((p) => p.draft));
+
+/*
+  ⚠️⚠️ 草稿这一份【要带 withRaw: true】，这是全场唯一一处传源码的地方。
+
+     为什么只在这里传：
+       回收站双击草稿要显示「原始 .md 源码」，所以它必须有 raw。
+       而「此电脑」「标签页」那些地方双击是去渲染 HTML，
+       完全用不到 raw —— 草稿正文可能几百 KB，
+       全量传过去就是白白撑大首屏 JSON。
+
+     换算一下：这篇 formula-draft.md 大约 2KB，
+     加上本来就有的 draft-note.md，增量在个位数 KB。
+     但如果以后草稿攒到几十篇，这个数字会线性增长 ——
+     那时候就该改成按需 fetch 了（见 verify 里对 JSON 体积的断言）。
+*/
+const drafts = toClientPosts(await getDrafts(), { withRaw: true });
+
+/** 浏览器「使用教程」标签页的内容，来自 src/content/guide/*.md
+ *  ⚠️ 注意这里【没有 await】—— getGuides() 是同步函数。
+ *     写成 await 虽然也能跑，但 astro check 会报 ts(80007) 警告。 */
+const { guides } = getGuides();
+
 const tags = await getTags();
 const categories = await getCategories();
 const stats = await getStats();
@@ -55,6 +76,7 @@ const stats = await getStats();
         tags={tags}
         categories={categories}
         stats={stats}
+        guides={guides}
       />
     </div>
   </main>
