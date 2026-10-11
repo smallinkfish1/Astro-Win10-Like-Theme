@@ -4,6 +4,7 @@ import type { Guide } from "../../../lib/guide";
 import BrowserLinks from "./browser/BrowserLinks";
 import BrowserSocial from "./browser/BrowserSocial";
 import BrowserGuide from "./browser/BrowserGuide";
+import { useT } from "../../../i18n";
 
 /**
  * 「浏览器」窗口 —— 一个套在桌面里的迷你浏览器。
@@ -47,6 +48,7 @@ export interface BrowserViewProps {
 }
 
 export default function BrowserView({ guides }: BrowserViewProps) {
+  const { t } = useT();
   const [activeId, setActiveId] = useState(BROWSER_TABS[0].id);
   /** 地址栏允许手输，但只用于「看起来像浏览器」，回车会去真实跳转 */
   const [addr, setAddr] = useState(BROWSER_TABS[0].url);
@@ -56,10 +58,10 @@ export default function BrowserView({ guides }: BrowserViewProps) {
 
   /** 切页时同步地址栏 */
   const goto = (id: string) => {
-    const t = BROWSER_TABS.find((x) => x.id === id);
-    if (!t) return;
+    const tab = BROWSER_TABS.find((x) => x.id === id);
+    if (!tab) return;
     setActiveId(id);
-    setAddr(t.url);
+    setAddr(tab.url);
   };
 
   const step = (delta: number) => {
@@ -96,13 +98,13 @@ export default function BrowserView({ guides }: BrowserViewProps) {
     <div className="flex h-full flex-col bg-[var(--surface)]">
       {/* ── 1. 标签页栏 ── */}
       <div className="flex shrink-0 items-end gap-0.5 bg-[var(--surface-3)] px-1 pt-1">
-        {BROWSER_TABS.map((t) => {
-          const on = t.id === activeId;
+        {BROWSER_TABS.map((tab) => {
+          const on = tab.id === activeId;
           return (
             <button
-              key={t.id}
+              key={tab.id}
               type="button"
-              onClick={() => goto(t.id)}
+              onClick={() => goto(tab.id)}
               className={`flex max-w-[170px] items-center gap-1.5 rounded-t px-3 py-1.5 text-[11.5px]
                           transition-colors ${
                             on
@@ -117,9 +119,9 @@ export default function BrowserView({ guides }: BrowserViewProps) {
                    第三个标签会错误地显示第二个的图标。
               */}
               <span className="text-[11px] leading-none" aria-hidden="true">
-                {t.icon}
+                {tab.icon}
               </span>
-              <span className="truncate">{t.tab}</span>
+              <span className="truncate">{tab.tab}</span>
             </button>
           );
         })}
@@ -127,7 +129,7 @@ export default function BrowserView({ guides }: BrowserViewProps) {
         <span
           className="mb-0.5 ml-1 grid h-5 w-5 place-items-center rounded text-[13px]
                      text-[var(--fg-faint)]"
-          title="新建标签页（演示界面）"
+          title={t("bv.newTab")}
           aria-hidden="true"
         >
           +
@@ -136,17 +138,17 @@ export default function BrowserView({ guides }: BrowserViewProps) {
 
       {/* ── 2. 地址栏 ── */}
       <div className="flex shrink-0 items-center gap-1.5 border-b border-[var(--surface-border)] bg-[var(--surface)] px-2 py-1.5">
-        <IconBtn label="后退" disabled={activeIdx <= 0} onClick={() => step(-1)}>
+        <IconBtn label={t("bv.back")} disabled={activeIdx <= 0} onClick={() => step(-1)}>
           ←
         </IconBtn>
         <IconBtn
-          label="前进"
+          label={t("bv.forward")}
           disabled={activeIdx >= BROWSER_TABS.length - 1}
           onClick={() => step(1)}
         >
           →
         </IconBtn>
-        <IconBtn label="刷新" onClick={() => setAddr(active.url)}>
+        <IconBtn label={t("bv.refresh")} onClick={() => setAddr(active.url)}>
           ↻
         </IconBtn>
 
@@ -170,12 +172,12 @@ export default function BrowserView({ guides }: BrowserViewProps) {
               }
             }}
             className="no-drag flex-1 bg-transparent text-[11.5px] outline-none"
-            aria-label="地址栏"
+            aria-label={t("bv.address")}
             spellCheck={false}
           />
         </div>
 
-        <IconBtn label="收藏" onClick={() => {}}>
+        <IconBtn label={t("bv.favorite")} onClick={() => {}}>
           ☆
         </IconBtn>
       </div>
@@ -207,7 +209,7 @@ export default function BrowserView({ guides }: BrowserViewProps) {
       {/* ── 状态栏：让"浏览器"这件事更完整 ── */}
       <div className="flex shrink-0 items-center gap-3 border-t border-[var(--surface-border)]
                       bg-[var(--surface-2)] px-3 py-0.5 text-[10.5px] text-[var(--fg-faint)]">
-        <span>演示页面 · 外链均在新标签页打开</span>
+        <span>{t("bv.statusBar")}</span>
         <span className="ml-auto">100%</span>
       </div>
     </div>

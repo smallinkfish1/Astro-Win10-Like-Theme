@@ -1,0 +1,319 @@
+import type { DictMap } from "./types";
+
+/**
+ * 中文词典（简体）
+ * ================================================================
+ *
+ * ⚠️ 这本是【基准词典】。加新文案的流程永远是：
+ *      1. 先在 types.ts 里加 key
+ *      2. 在这里写中文
+ *      3. 去 en.ts 补英文（不补会编译报错）
+ *
+ * ⚠️ 这些文字原本散落在各个组件里，抽取时顺手统一了几处同义异写
+ *    （比如把「好的」「确定」这类合并成同一个 key）。
+ *    所以如果你在 git diff 里看到某句话措辞变了，不是翻译错了，
+ *    是有意统一的结果。
+ *
+ * ⚠️ 术语保持和 Win10 简体中文版一致：
+ *    「此电脑」「回收站」「控制面板」「文件资源管理器」，
+ *    这样英文版才能一一对应到微软官方英文名。
+ */
+export const zhCN: DictMap = {
+  /* ── 应用名 ── */
+  "app.thisPC": "此电脑",
+  "app.notepad": "记事本",
+  "app.browser": "浏览器",
+  "app.recycleBin": "回收站",
+  "app.controlPanel": "控制面板",
+  "app.tags": "标签",
+  "app.about": "关于",
+  "app.archive": "归档",
+  "app.posts": "最新文章",
+  "app.search": "搜索",
+  "app.bilibili": "B站",
+  "app.github": "GitHub",
+  "app.photos": "相册",
+  "app.aboutMe": "关于我",
+
+  /* ── 窗口控件 ── */
+  "win.minimize": "最小化",
+  "win.maximize": "最大化",
+  "win.restore": "还原",
+  "win.close": "关闭",
+  "win.emptyTitle": "这个窗口还没有接上内容。",
+  "win.emptyBody": "窗口没有对应的视图，可能是打开的路径不正确。",
+  "win.emptyPath": "URL 路径：{path}",
+  "win.notFoundPost": "找不到文章：{slug}",
+  "win.notFoundDraft": "找不到草稿：{slug}",
+  "win.unknownType": "未知窗口类型：{id}",
+  "win.readonlySuffix": "（只读）",
+  "win.tagTitle": "标签：{name}",
+  "win.categoryTitle": "分类：{name}",
+  "win.controlPanelTitle": "控制面板 - {name}",
+
+  /* ── 任务栏 ── */
+  "taskbar.start": "开始",
+  "taskbar.showDesktop": "回到桌面",
+
+  /* ── 开始菜单 ── */
+  "menu.recentlyAdded": "最近添加",
+  "menu.expand": "展开",
+  "menu.collapse": "收起",
+  "menu.tileCount": "共 {n} 个磁贴",
+  "menu.tileCountHint": "改 src/config/tiles.ts 增删",
+
+  /* ── 此电脑 / 回收站 ── */
+  "ex.new": "新建",
+  "ex.share": "共享",
+  "ex.delete": "删除",
+  "ex.viewFolder": "文件夹",
+  "ex.viewList": "列表",
+  "ex.viewFolderTip": "按分类文件夹查看",
+  "ex.viewListTip": "平铺显示全部文章",
+  "ex.back": "返回上一级",
+  "ex.search": "搜索",
+  "ex.searchTip": "搜索请用开始菜单的搜索框",
+  "ex.allItems": "全部项目",
+  "ex.itemCount": "{n} 个项目",
+  "ex.selected": "已选中：{name}",
+  "ex.doubleClickOpen": "双击打开",
+  "ex.emptyFolder": "这个文件夹是空的",
+  "ex.folder": "文件夹",
+  "ex.uncategorized": "未分类",
+  "ex.name": "名称",
+  "ex.type": "类型",
+  "ex.dateModified": "修改日期",
+  "ex.sortTip": "按「{name}」排序，再点一次反转方向",
+  "ex.demoOnly": "{name}（演示界面，暂未实现）",
+  "ex.noPosts": "还没有文章。在 src/content/blog/ 下新建一个 .md 就会出现在这里。",
+  "ex.draftCount": "{n} 篇草稿 · 不会出现在公开列表中",
+  "ex.recycleEmpty":
+    "回收站是空的。在文章 frontmatter 里写 draft: true，它就会出现在这里。",
+  "ex.postKind": "文章",
+  "ex.draftKind": "草稿",
+
+  /* ── 记事本 ── */
+  "np.file": "文件",
+  "np.new": "新建",
+  "np.openStatic": "在静态页打开 ↗",
+  "np.exit": "退出记事本",
+  "np.edit": "编辑",
+  "np.selectAll": "全选",
+  "np.copy": "复制",
+  "np.find": "查找…（用浏览器 Ctrl+F）",
+  "np.format": "格式",
+  "np.wordWrap": "自动换行",
+  "np.wordWrapOff": "不换行",
+  "np.font": "字体 {size}px",
+  "np.view": "查看",
+  "np.renderedView": "渲染视图  (F9)",
+  "np.sourceView": "源码视图 .md 原文  (F9)",
+  "np.prev": "上一篇",
+  "np.next": "下一篇",
+  "np.random": "随机换一篇",
+  "np.help": "帮助",
+  "np.aboutNotepad": "关于记事本",
+  "np.switchArticle": "切换文章",
+  "np.empty": "记事本里还没有内容",
+  "np.readonly": "只读",
+  "np.readonlyTip": "草稿是未完成的内容，这里只展示原始文件",
+  "np.readonlyAria": "{title} 的 Markdown 原文（只读）",
+  "np.markdownAria": "{title} 的 Markdown 原文",
+  "np.toggleTip": "回收站里的草稿只能查看源码",
+  "np.toggleTipNormal": "切换渲染视图 / 源码视图",
+  "np.lineCol": "第 {line} 行，第 {col} 列",
+  "np.reading": "阅读",
+  "np.bytes": "{n} 字节",
+  "np.renderedViewShort": "渲染视图",
+  "np.sourceViewShort": "源码视图",
+
+  /* ── 浏览器 ── */
+  "bv.back": "后退",
+  "bv.forward": "前进",
+  "bv.refresh": "刷新",
+  "bv.address": "地址栏",
+  "bv.favorite": "收藏",
+  "bv.newTab": "新建标签页（演示界面）",
+  "bv.statusBar": "演示页面 · 外链均在新标签页打开",
+  "bv.noFriendLinks": "还没有友情链接",
+  "bv.friendHint": "想加减友链？改 src/config/links.ts 就行，不用动代码。",
+  "bv.noSocials": "还没有配置社交链接",
+  "bv.socialHint": "这些链接在 src/config/site.ts 里改。",
+  "bv.toc": "目录",
+  "bv.noGuides": "还没有教程",
+  "bv.noGuidesHint": "在 src/content/guide/ 下新建 .md 就会出现在这里",
+  "bv.tab.links": "友情链接",
+  "bv.tab.social": "找到我",
+  "bv.tab.guide": "使用教程",
+  "bv.tab.linksDesc": "这个博客一路上参考过的地方，推荐给同样在做个人站的朋友。",
+  "bv.tab.socialDesc": "想聊聊、想订阅、想看源码，从这里走。",
+  "bv.tab.guideDesc": "这个主题怎么用、怎么改，都写在这里。",
+
+  /* ── 控制面板 ── */
+  "cp.title": "控制面板",
+  "cp.navAria": "控制面板分类",
+  "cp.savedLocally": "设置保存在本机浏览器",
+  "cp.inDevelopment": "功能开发中…",
+  "cp.nav.appearance": "外观",
+  "cp.nav.about": "关于",
+  "cp.nav.language": "语言和区域",
+  "cp.nav.changelog": "更新日志",
+  "cp.desc.appearance": "壁纸、亮色/暗色模式、毛玻璃、动画与开始菜单配色。",
+  "cp.desc.about": "这个桌面主题的技术栈、设计取舍与实现说明。",
+  "cp.desc.language": "界面语言与地区格式。",
+  "cp.desc.changelog": "这个主题每个阶段做了什么。",
+  "cp.appearance.lead": "这里的每一项都会立刻生效，并且保存在浏览器本地 —— 下次打开还记得。",
+  "cp.wallpaper": "壁纸",
+  "cp.colors": "颜色",
+  "cp.appMode": "应用模式",
+  "cp.appModeDesc": "整个桌面、窗口、开始菜单都跟着切换配色。",
+  "cp.light": "亮色",
+  "cp.dark": "暗色",
+  "cp.startMenuDark": "开始菜单深色",
+  "cp.startMenuDarkDesc":
+    "只把开始菜单压成深色亚克力，不影响任务栏和窗口。这就是 Win10 最经典的那个开始菜单观感。",
+  "cp.effects": "效果",
+  "cp.acrylic": "毛玻璃效果",
+  "cp.acrylicDesc":
+    "任务栏和开始菜单的半透明模糊材质。关闭后改为不透明底色，在低配设备上更流畅。",
+  "cp.anim": "界面动画",
+  "cp.animDesc": "窗口缩放、开始菜单滑入、磁贴悬停等动效。关闭后所有过渡立即完成。",
+  "cp.reset": "恢复默认设置",
+  "cp.resetHint": "（壁纸、配色、毛玻璃、动画、开始菜单全部复位）",
+  "cp.aboutLead":
+    "这个桌面把博客做成了一个操作系统的样子 —— 但不是为了好玩：每篇文章依然是独立、可被搜索引擎抓取的静态页，桌面只是站内导航的第二副面孔。",
+  "cp.overview": "概况",
+  "cp.notes": "说明",
+  "cp.kb.position": "定位",
+  "cp.kb.stack": "技术栈",
+  "cp.kb.theming": "主题体系",
+  "cp.kb.render": "文章渲染",
+  "cp.kb.data": "数据来源",
+  "cp.v.position": "一个 Windows 10 风格的个人博客桌面",
+  "cp.v.stack": "Astro + React 岛屿 + Zustand + Tailwind",
+  "cp.v.theming": "CSS 变量 + <html> 上的 class / data 属性",
+  "cp.v.render": "Markdown → KaTeX（公式）+ 代码高亮",
+  "cp.v.data": "构建期读取 content collection，运行时只做展示",
+  "cp.note1": "· 设置存放在浏览器 localStorage，清除浏览器数据会重置，换设备不会同步。",
+  "cp.note2": "· 首次访问自动跟随系统的亮色/暗色偏好；手动设置过之后以你的选择为准。",
+  "cp.note3": "· 开启「界面动画」时，若系统设置了「减少动态效果」，浏览器会优先尊重系统。",
+  "cp.wallpaperMissing": "{name}（图片待补充）",
+  "cp.wallpaperPending": "待补充",
+  "cp.wallpaperNotReady": "未就绪",
+  "cp.wallpaperHint":
+    "显示「待补充」的壁纸还缺图片文件 —— 把对应文件放进 public/wallpapers/ 即可启用（亮色与暗色各一张，文件名见下方说明）。亮色和暗色主题会自动使用对应的版本。",
+
+  /* ── 语言和区域 ── */
+  "lang.title": "语言和区域",
+  "lang.lead": "选择界面显示的语言。切换会立刻生效，并保存在浏览器本地。",
+  "lang.displayLanguage": "显示语言",
+  "lang.displayLanguageDesc":
+    "桌面、窗口、开始菜单、任务栏的文字语言。文章和教程的正文不受影响，它们始终是原文。",
+  "lang.regionalFormat": "地区格式",
+  "lang.regionalFormatDesc":
+    "开启后，日期和数字会按所选语言的习惯显示；关闭则始终使用中文格式。",
+  "lang.regionalOn": "跟随语言",
+  "lang.regionalOff": "固定中文",
+  "lang.note1": "· 这篇文章的正文、教程内容不会跟随语言切换 —— 它们是内容，不是界面。",
+  "lang.note2": "· 静态页面（/posts、/about 等）目前保持中文，桌面窗口内的界面才会切换。",
+  "lang.note3": "· 语言设置存放在 localStorage，清除浏览器数据会重置。",
+
+  /* ── 文章目录（TOC） ── */
+  "toc.title": "目录",
+  "toc.aria": "文章目录",
+  "toc.expand": "展开目录",
+  "toc.collapse": "收起目录",
+
+  /* ── 关于视图 ── */
+  "about.stats": "站点统计",
+  "about.findMe": "找到我",
+  "about.stack": "技术栈",
+  "about.stackNote":
+    "静态页由 Astro 在构建期渲染，窗口系统是唯一的 React 岛屿。两边的正文排版共用同一个 .md-body 类，所以不会出现「站内两处正文长得不一样」。",
+  "about.recentlyUpdated": "最近更新：{date}",
+  "about.avatarAlt": "{name} 的头像",
+
+  /* ── 文章列表 / 归档 / 标签 ── */
+  "post.allPosts": "全部文章",
+  "post.filterPlaceholder": "在此列表中筛选…",
+  "post.noPosts": "这里还没有文章",
+  "post.noMatch": "没有匹配的文章",
+  "post.noSummary": "（暂无摘要）",
+  "post.count": "{n} 篇",
+  "post.staticPage": "静态页 ↗",
+  "post.footerTip": "双击打开文章 · 单击选中 · 最新更新 {date}",
+  "post.dateLabel": "修改日期",
+  "post.categoryLabel": "分类",
+  "post.openAria": "打开 {title}",
+  "post.ctrlClickTip": "按住 Ctrl 点击可在新标签打开静态页",
+  "post.hasStaticPage": "这篇文章也有独立静态页：",
+  "archive.empty": "归档为空",
+  "archive.footer": "共 {n} 篇 · 双击可在窗口中打开",
+  "archive.yearUnit": "{n} 年",
+  "archive.monthUnit": "{n} 个月",
+  "tags.cloud": "标签云",
+  "tags.categories": "分类",
+  "tags.noPosts": "没有文章",
+  "tags.postCount": "{n} 篇文章",
+  "tags.tagCount": "{n} 个",
+  "tags.categoryCount": "{n} 个",
+
+  /* ── 站点统计 ── */
+  "stats.posts": "文章",
+  "stats.categories": "分类",
+  "stats.tags": "标签",
+  "stats.words": "字数",
+
+  /* ── 量词 ── */
+  "unit.post": "篇",
+  "unit.item": "个",
+  "unit.itemShort": "个项目",
+  "unit.tag": "个",
+  "unit.category": "个",
+  "unit.words": "约",
+  "unit.about": "约",
+
+  /* ── 站点自身 ── */
+  "site.profileName": "你好，我是站长",
+  "site.bio1":
+    "这里是一个把博客做成了 Windows 10 桌面的地方。双击图标开窗口，任务栏切换窗口，开始菜单里是真实的分类和标签。",
+  "site.bio2":
+    "界面看起来像个壳，但每一篇文章都有独立的静态页 —— 体验归体验，内容归内容。",
+  "site.note.source": "源码",
+  "site.note.subscribe": "订阅",
+  "site.note.contact": "联系",
+  "site.note.sitemap": "站点地图",
+  "site.note.video": "视频",
+  "site.note.channel": "频道",
+  "site.note.community": "社群",
+  "site.note.moments": "动态",
+  "site.note.oldAccount": "旧号",
+
+  /* ── 时间 ── */
+  "time.sunday": "星期日",
+  "time.monday": "星期一",
+  "time.tuesday": "星期二",
+  "time.wednesday": "星期三",
+  "time.thursday": "星期四",
+  "time.friday": "星期五",
+  "time.saturday": "星期六",
+  "time.justNow": "刚刚",
+  "time.minutesAgo": "{n} 分钟前",
+  "time.hoursAgo": "{n} 小时前",
+  "time.daysAgo": "{n} 天前",
+  "time.readingTime": "{n} 分钟阅读",
+
+  /* ── 磁贴 ── */
+  "tile.group.create": "Create",
+  "tile.group.play": "Play",
+  "tile.group.explore": "Explore",
+  "tile.external": "（外部链接）",
+  "tile.weather.cloudy": "多云",
+  "tile.weather.placeholder": "—",
+
+  /* ── 壁纸名 ── */
+  "wallpaper.default": "默认（Win10 蓝）",
+  "wallpaper.aurora": "极光",
+  "wallpaper.mountain": "山脉",
+  "wallpaper.geometric": "抽象几何",
+};

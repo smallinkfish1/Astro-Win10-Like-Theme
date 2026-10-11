@@ -7,6 +7,7 @@ import {
   isExternal,
   type SocialLink,
 } from "../../../config/site";
+import { useT } from "../../../i18n";
 
 export interface AboutStats {
   postCount: number;
@@ -29,6 +30,7 @@ export interface AboutStats {
  *    （src/pages/about.astro）读的是同一份数据，改一处两处都变。
  */
 export default function AboutView({ stats }: { stats: AboutStats }) {
+  const { t } = useT();
   const words = stats.wordCount.toLocaleString("en-US");
   const links = visibleSocials();
   const avatarSrc = resolveAvatar();
@@ -55,13 +57,13 @@ export default function AboutView({ stats }: { stats: AboutStats }) {
 
       {/* ── 站点统计 ── */}
       <section>
-        <h4 className="mb-2 text-[12px] font-semibold text-[#16202c]">站点统计</h4>
+        <h4 className="mb-2 text-[12px] font-semibold text-[#16202c]">{t("about.stats")}</h4>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {[
-            { k: "文章", v: stats.postCount, u: "篇" },
-            { k: "分类", v: stats.categoryCount, u: "个" },
-            { k: "标签", v: stats.tagCount, u: "个" },
-            { k: "字数", v: words, u: "约" },
+            { k: "stats.posts" as const, v: stats.postCount, u: "unit.post" as const },
+            { k: "stats.categories" as const, v: stats.categoryCount, u: "unit.category" as const },
+            { k: "stats.tags" as const, v: stats.tagCount, u: "unit.tag" as const },
+            { k: "stats.words" as const, v: words, u: "unit.words" as const },
           ].map((s) => (
             <div
               key={s.k}
@@ -71,21 +73,21 @@ export default function AboutView({ stats }: { stats: AboutStats }) {
                 {s.v}
               </div>
               <div className="text-[10.5px] text-[#8a94a3]">
-                {s.u} {s.k}
+                {t(s.u)} {t(s.k)}
               </div>
             </div>
           ))}
         </div>
         {stats.latest && (
           <p className="mt-2 text-[11.5px] text-[#8a94a3]">
-            最近更新：{stats.latest.slice(0, 10)}
+            {t("about.recentlyUpdated", { date: stats.latest.slice(0, 10) })}
           </p>
         )}
       </section>
 
       {/* ── 外链 ── */}
       <section>
-        <h4 className="mb-2 text-[12px] font-semibold text-[var(--fg)]">找到我</h4>
+        <h4 className="mb-2 text-[12px] font-semibold text-[var(--fg)]">{t("about.findMe")}</h4>
         <div className="social-grid grid grid-cols-2 gap-2">
           {links.map((l) => (
             <SocialCard key={l.name} s={l} />
@@ -95,21 +97,18 @@ export default function AboutView({ stats }: { stats: AboutStats }) {
 
       {/* ── 技术栈 ── */}
       <section className="border-t border-[var(--surface-border)] pt-4">
-        <h4 className="mb-2 text-[12px] font-semibold text-[var(--fg)]">技术栈</h4>
+        <h4 className="mb-2 text-[12px] font-semibold text-[var(--fg)]">{t("about.stack")}</h4>
         <div className="flex flex-wrap gap-1.5">
           {["Astro", "React", "TypeScript", "Tailwind CSS", "Zustand", "react-rnd", "marked"].map(
-            (t) => (
-              <span key={t} className="md-chip">
-                {t}
+            (name) => (
+              <span key={name} className="md-chip">
+                {name}
               </span>
             )
           )}
         </div>
         <p className="mt-3 text-[11.5px] leading-relaxed text-[var(--fg-faint)]">
-          静态页由 Astro 在构建期渲染，窗口系统是唯一的 React 岛屿。
-          两边的正文排版共用同一个{" "}
-          <code className="rounded bg-[var(--surface-3)] px-1">.md-body</code> 类，
-          所以不会出现"站内两处正文长得不一样"。
+          {t("about.stackNote")}
         </p>
       </section>
     </div>
@@ -146,13 +145,14 @@ function Avatar({
    *    退回 emoji 至少还是"一个像样的头像"。
    */
   const showImg = src && !broken;
+  const { t } = useT();
 
   return (
     <div className={`avatar-box ${className ?? ""}`}>
       {showImg ? (
         <img
           src={src}
-          alt={`${PROFILE.name} 的头像`}
+          alt={t("about.avatarAlt", { name: PROFILE.name })}
           loading="lazy"
           decoding="async"
           onError={() => setBroken(true)}

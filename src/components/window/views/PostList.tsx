@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
-import { formatDate, relativeDate, readingTime, type ClientPost } from "../../../lib/markdown";
+import { formatDate, readingMinutes, type ClientPost } from "../../../lib/markdown";
+import { useT, fmtRelative } from "../../../i18n";
 
 /**
  * 窗口内的文章列表（"我的文档"）。
@@ -14,11 +15,19 @@ import { formatDate, relativeDate, readingTime, type ClientPost } from "../../..
  */
 export default function PostList({
   posts,
-  title = "全部文章",
+  title,
 }: {
   posts: ClientPost[];
   title?: string;
 }) {
+  const { t } = useT();
+
+  /**
+   * ⚠️ 标题的默认值必须在这里算，不能写成参数默认值 `title = "全部文章"`。
+   *    因为默认参数在那个位置上调用不了 hook —— t 还没拿到。
+   */
+  const heading = title ?? t("post.allPosts");
+
   const [selected, setSelected] = useState<string | null>(null);
   const [query, setQuery] = useState("");
 
@@ -50,13 +59,15 @@ export default function PostList({
       {/* ── 顶部：标题 + 本地过滤 ── */}
       <div className="mb-3 flex shrink-0 items-center gap-3">
         <div className="text-[13px] font-semibold text-[#16202c]">
-          {title}
-          <span className="ml-2 font-normal text-[#8a94a3]">{filtered.length} 篇</span>
+          {heading}
+          <span className="ml-2 font-normal text-[#8a94a3]">
+            {t("post.count", { n: filtered.length })}
+          </span>
         </div>
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="在此列表中筛选…"
+          placeholder={t("post.filterPlaceholder")}
           className="no-drag ml-auto w-44 rounded border border-[#d8dee6] px-2 py-1 text-[12px]
                      outline-none transition-colors focus:border-[#2b579a]"
         />
@@ -66,7 +77,7 @@ export default function PostList({
       <div className="min-h-0 flex-1 overflow-y-auto pr-1">
         {filtered.length === 0 ? (
           <div className="grid h-full place-items-center text-[12px] text-[#98a1ae]">
-            {posts.length === 0 ? "这里还没有文章" : "没有匹配的文章"}
+            {posts.length === 0 ? t("post.noPosts") : t("post.noMatch")}
           </div>
         ) : (
           <div className="flex flex-col gap-2">
@@ -77,7 +88,7 @@ export default function PostList({
                   key={p.slug}
                   role="button"
                   tabIndex={0}
-                  aria-label={`打开 ${p.title}`}
+                  aria-label={t("post.openAria", { title: p.title })}
                   onDoubleClick={() => openPost(p)}
                   onClick={() => setSelected(p.slug)}
                   onKeyDown={(e) => {
@@ -93,12 +104,12 @@ export default function PostList({
                   style={p.accent ? { borderLeftColor: p.accent } : undefined}
                 >
                   <h3 className="post-card-title">{p.title}</h3>
-                  <p className="post-card-desc">{p.description || "（暂无摘要）"}</p>
+                  <p className="post-card-desc">{p.description || t("post.noSummary")}</p>
 
                   <div className="post-card-foot">
                     <span>{formatDate(p.pubDate)}</span>
                     <span>·</span>
-                    <span>{readingTime(p.body)}</span>
+                    <span>{t("time.readingTime", { n: readingMinutes(p.body) })}</span>
                     <span>·</span>
                     <span className="text-[#41566f]">{p.category}</span>
 
@@ -116,7 +127,7 @@ export default function PostList({
                       rel="noreferrer"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      静态页 ↗
+                      {t("post.staticPage")}
                     </a>
                   </div>
                 </div>
@@ -129,7 +140,7 @@ export default function PostList({
       {/* ── 底部提示：讲清楚"双击"这个隐藏操作 ── */}
       {filtered.length > 0 && (
         <div className="mt-2 shrink-0 border-t border-[#eceff2] pt-2 text-[11px] text-[#98a1ae]">
-          双击打开文章 · 单击选中 · 最新更新 {relativeDate(posts[0]?.pubDate ?? "")}
+          {t("post.footerTip", { date: fmtRelative(posts[0]?.pubDate ?? "", t) })}
         </div>
       )}
     </div>

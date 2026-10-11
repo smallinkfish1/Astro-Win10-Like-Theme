@@ -1,6 +1,8 @@
 import { GRID } from "../../config/tiles";
 import { usedRows, type LaidOutGroup, type LaidOutTile } from "../../lib/tiles";
 import Tile from "./Tile";
+import { useT } from "../../i18n";
+import type { Dict } from "../../i18n/types";
 
 /**
  * 磁贴网格（支持多分组）。
@@ -32,6 +34,7 @@ function Group({
   /** 全局错峰索引起点，让入场动画跨组连成一片 */
   startIndex: number;
 }) {
+  const { t } = useT();
   const rows = usedRows(group.tiles);
 
   /** 容器尺寸 = 行数/列数占到的位置 + 一个格子 */
@@ -48,7 +51,9 @@ function Group({
   return (
     <section className="mb-4 last:mb-0">
       {/* 分组标题 —— 对应截图里的 Create / Play / Explore */}
-      <h3 className="mb-2 text-[11px] tracking-wide opacity-55">{group.title}</h3>
+      <h3 className="mb-2 text-[11px] tracking-wide opacity-55">
+        {t(group.titleKey as keyof Dict)}
+      </h3>
 
       <div className="relative" style={{ width, height }}>
         {group.tiles.map((t, i) => (
@@ -84,7 +89,7 @@ export default function TileGrid({
       {groups.map((g) => {
         const start = cursor;
         cursor += g.tiles.length;
-        return <Group key={g.title} group={g} onActivate={onActivate} startIndex={start} />;
+        return <Group key={g.titleKey} group={g} onActivate={onActivate} startIndex={start} />;
       })}
     </div>
   );

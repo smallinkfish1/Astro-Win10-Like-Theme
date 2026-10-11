@@ -1,4 +1,6 @@
 import { useEffect, useCallback } from "react";
+import { useT, t as tNow } from "../../i18n";
+import type { Dict } from "../../i18n/types";
 import { AnimatePresence } from "motion/react";
 import { useWindowStore } from "../../store/windowStore";
 import type { ClientPost } from "../../lib/markdown";
@@ -7,6 +9,7 @@ import {
   DEFAULT_SETTINGS_SECTION,
   findSection,
   normalizeSection,
+  type SettingsSection,
 } from "../../lib/settings-sections";
 import Window from "./Window";
 import ArticleView from "./views/ArticleView";
@@ -28,13 +31,36 @@ import BrowserView from "./views/BrowserView";
  *    但这里找不到同 id 的项，窗口层不知道开什么 —— 看起来像"点了没反应"。
  *    （verify-desktop.mjs 里有一条断言专门盯着这个。）
  */
+/**
+ * ⚠️ 这里存的是 titleKey，不是文案本身。
+ *
+ *    它和 Desktop.astro 里的 icons、config/tiles.ts 一样，是【模块顶层】的
+ *    常量 —— 创建时 React 还没挂载、store 还没初始化，
+ *    在这里调 t() 会固化一个错误的值，而且之后切语言也不会重算。
+ *    所以只放注册名，真正的文字在 open() 的那一刻才翻译。
+ */
 export const ICON_ROUTES = [
-  { id: "pc", title: "此电脑", icon: "/icons/pc.png", path: "/archive" },
-  { id: "notepad", title: "记事本", icon: "/icons/notepad.png", path: "/posts" },
-  { id: "browser", title: "浏览器", icon: "/icons/browser.png", path: "/about" },
-  { id: "recycle", title: "回收站", icon: "/icons/recycle.png", path: "/drafts" },
-  { id: "control", title: "控制面板", icon: "/icons/control.png", path: "/settings" },
+  { id: "pc", titleKey: "app.thisPC", icon: "/icons/pc.png", path: "/archive" },
+  { id: "notepad", titleKey: "app.notepad", icon: "/icons/notepad.png", path: "/posts" },
+  { id: "browser", titleKey: "app.browser", icon: "/icons/browser.png", path: "/about" },
+  { id: "recycle", titleKey: "app.recycleBin", icon: "/icons/recycle.png", path: "/drafts" },
+  { id: "control", titleKey: "app.controlPanel", icon: "/icons/control.png", path: "/settings" },
 ];
+
+/**
+ * 「控制面板 - 外观」这种窗口标题。
+ *
+ * ⚠️ 为什么读 s.nameKey 而不是 s.name？
+ *    settings-sections.ts 里的 name / desc 是【构建期定死的中文】——
+ *    那份配置同时被静态页（getStaticPaths）消费，而静态页在这一版里
+ *    不参与语言切换。窗口内要跟着语言走，所以用 nameKey。
+ *
+ * ⚠️ 用 tNow（即时读 store）而不是 useT 返回的 t：
+ *    本函数会在 effect 里调用，订阅版会拿到过期的闭包。
+ */
+function controlTitle(s: SettingsSection): string {
+  return tNow("win.controlPanelTitle", { name: tNow(s.nameKey as keyof Dict) });
+}
 
 /**
  * 用 replaceState 而不是 pushState：连点多个图标不会塞满历史记录。
@@ -97,6 +123,21 @@ export default function WindowManager({
   stats,
   guides,
 }: WindowManagerProps) {
+  /**
+   * 订阅语言 —— 只用它触发重渲染，不接收它的 t。
+   *
+   * ⚠️ 取文案统一走 tNow()（上面从 ../../i18n 直接导入的那个）。原因：
+   *    本组件的文案大多在 useEffect / useCallback 里取 ——
+   *      · 用订阅版的 t，闭包会一直抓着"首次渲染时的语言"，切了也不更新；
+   *      · 把这个每次渲染都新建的 t 塞进依赖数组，又会让 effect
+   *        每次都重跑（反复注册/注销监听器）。
+   *
+   *    tNow() 读的是 store 的当前值，不受闭包影响，因此可以不出现在
+   *    任何依赖数组里。它唯一的代价是不具响应性 ——
+   *    所以才需要这行 useT() 在语言变化时把整个窗口层重渲染一遍。
+   */
+  useT();
+
   const windows = useWindowStore((s) => s.windows);
   const open = useWindowStore((s) => s.open);
 
@@ -178,7 +219,7 @@ export default function WindowManager({
         if (!article) {
           return (
             <div className="grid h-full place-items-center text-[12px] text-[var(--fg-faint)]">
-              找不到文章：{slug}
+               {tNow("win.notFoundPost", { slug })}
             </div>
           );
         }
@@ -213,7 +254,7 @@ export default function WindowManager({
         if (!article) {
           return (
             <div className="grid h-full place-items-center text-[12px] text-[var(--fg-faint)]">
-              找不到草稿：{slug}
+               {tNow("win.notFoundDraft", { slug })}
             </div>
           );
         }
@@ -247,7 +288,7 @@ export default function WindowManager({
         if (article) return <ArticleView article={article} />;
         return (
           <div className="grid h-full place-items-center text-[12px] text-[#98a1ae]">
-            找不到文章：{slug}
+             {tNow("win.notFoundPost", { slug })}
           </div>
         );
       }
@@ -282,7 +323,7 @@ export default function WindowManager({
       // 留个兜底提示比返回 undefined 好 —— 至少能看出是 id 拼错了
       return (
         <div className="grid h-full place-items-center text-[12px] text-[var(--fg-faint)]">
-          未知窗口类型：{id}
+           {tNow("win.unknownType", { id })}
         </div>
       );
     },
@@ -302,7 +343,19 @@ export default function WindowManager({
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       if (!detail?.id) return;
-      open(detail);
+
+      /**
+       * ⚠️⚠️ 桌面图标的名字来自 Astro 静态 HTML 的 data-title ——
+       *    那是【构建期】就写死的，不会跟着界面语言变。
+       *
+       *    所以这里要拿 id 回查 ICON_ROUTES 取注册名，现翻一次；
+       *    查不到的（比如视图内部派发的、不在表里的 id）才退回 detail.title。
+       *    少了这一步，英文界面下点桌面图标开出来的窗口标题还是中文。
+       */
+      const route = ICON_ROUTES.find((r) => r.id === detail.id);
+      const title = route ? tNow(route.titleKey as keyof Dict) : detail.title;
+
+      open({ ...detail, title });
       syncUrl(detail.path);
     };
     window.addEventListener("os:open-window", handler);
@@ -360,7 +413,7 @@ export default function WindowManager({
         const article = drafts.find((p) => p.slug === detail.slug);
         open({
           id: `source:${detail.slug}`,
-          title: `${article?.title ?? detail.title ?? detail.slug}（只读）`,
+          title: `${article?.title ?? detail.title ?? detail.slug}${tNow("win.readonlySuffix")}`,
           icon: "/icons/notepad.png",
           path: "/drafts",
           ...articleSize(),
@@ -455,7 +508,7 @@ export default function WindowManager({
        */
       useWindowStore.setState({
         windows: store.windows.map((w) =>
-          w.uid === panel.uid ? { ...w, id: `control:${section}`, title: `控制面板 - ${s.name}` } : w
+          w.uid === panel.uid ? { ...w, id: `control:${section}`, title: controlTitle(s) } : w
         ),
       });
 
@@ -497,7 +550,7 @@ export default function WindowManager({
     // /tags/<tag>
     const tagMatch = path.match(/^\/tags\/(.+)$/);
     if (tagMatch) {
-      open({ id: `tag:${tagMatch[1]}`, title: `标签：${tagMatch[1]}`, icon: "🏷️", path });
+      open({ id: `tag:${tagMatch[1]}`, title: tNow("win.tagTitle", { name: tagMatch[1] }), icon: "🏷️", path });
       return;
     }
 
@@ -506,7 +559,7 @@ export default function WindowManager({
     if (catMatch) {
       open({
         id: `category:${catMatch[1]}`,
-        title: `分类：${catMatch[1]}`,
+        title: tNow("win.categoryTitle", { name: catMatch[1] }),
         icon: "🏷️",
         path,
       });
@@ -535,7 +588,7 @@ export default function WindowManager({
       const s = findSection(section);
       open({
         id: `control:${section}`,
-        title: `控制面板 - ${s.name}`,
+        title: controlTitle(s),
         icon: "/icons/control.png",
         path,
       });
@@ -554,10 +607,15 @@ export default function WindowManager({
        */
       if (match.id === "control") {
         const s = findSection(DEFAULT_SETTINGS_SECTION);
-        open({ ...match, id: `control:${s.id}`, title: `控制面板 - ${s.name}` });
+        open({ ...match, id: `control:${s.id}`, title: controlTitle(s) });
         return;
       }
-      open(match);
+      /**
+       * ⚠️ ICON_ROUTES 里存的是 titleKey，而 open() 要的是 title ——
+       *    所以必须显式翻译一次，不能像以前那样直接把 match 丢进去，
+       *    否则窗口标题会变成 "app.thisPC" 这种注册名。
+       */
+      open({ ...match, title: tNow(match.titleKey as keyof Dict) });
     }
     // ⚠️ 这个 effect 只在挂载时跑一次（有意为之）。
     // 如果依赖 posts/drafts，每次数据变化都会重新还原窗口，
@@ -593,7 +651,7 @@ export default function WindowManager({
 
       const tagMatch = path.match(/^\/tags\/(.+)$/);
       if (tagMatch) {
-        open({ id: `tag:${tagMatch[1]}`, title: `标签：${tagMatch[1]}`, icon: "🏷️", path });
+        open({ id: `tag:${tagMatch[1]}`, title: tNow("win.tagTitle", { name: tagMatch[1] }), icon: "🏷️", path });
         return;
       }
 
@@ -601,7 +659,7 @@ export default function WindowManager({
       if (catMatch) {
         open({
           id: `category:${catMatch[1]}`,
-          title: `分类：${catMatch[1]}`,
+          title: tNow("win.categoryTitle", { name: catMatch[1] }),
           icon: "🏷️",
           path,
         });
@@ -622,7 +680,7 @@ export default function WindowManager({
         const s = findSection(section);
         open({
           id: `control:${section}`,
-          title: `控制面板 - ${s.name}`,
+          title: controlTitle(s),
           icon: "/icons/control.png",
           path,
         });
@@ -633,10 +691,10 @@ export default function WindowManager({
       if (match) {
         if (match.id === "control") {
           const s = findSection(DEFAULT_SETTINGS_SECTION);
-          open({ ...match, id: `control:${s.id}`, title: `控制面板 - ${s.name}` });
+          open({ ...match, id: `control:${s.id}`, title: controlTitle(s) });
           return;
         }
-        open(match);
+        open({ ...match, title: tNow(match.titleKey as keyof Dict) });
       } else {
         useWindowStore.setState({ windows: [] });
       }

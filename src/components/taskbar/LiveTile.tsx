@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { useT } from "../../i18n";
+import { WEEKDAY_KEYS } from "../../i18n/types";
 
 /**
  * 实时磁贴的动态内容。
@@ -33,15 +35,20 @@ import { useEffect, useState } from "react";
    日期磁贴：大号日期数字 + 星期几
    ──────────────────────────────────────────────────────────── */
 
-const WEEKDAYS_CN = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
-
-/** 日期磁贴用。返回 null 表示"还没到客户端"，调用方渲染占位 */
-function useToday(): { day: number; weekday: string } | null {
-  const [today, setToday] = useState<{ day: number; weekday: string } | null>(null);
+/**
+ * ⚠️ 这里【只存星期几的序号】，不存星期几的文字。
+ *
+ *    因为文字要跟着界面语言变。如果在 useEffect 里就把
+ *    "星期日" 存进 state，那么用户切语言时这个 state 不会重算 ——
+ *    日期磁贴会一直显示切换前的语言，直到跨过午夜才纠正。
+ *    存序号、渲染时再 t()，就没有这个问题。
+ */
+function useToday(): { day: number; weekdayIndex: number } | null {
+  const [today, setToday] = useState<{ day: number; weekdayIndex: number } | null>(null);
 
   useEffect(() => {
     const now = new Date();
-    setToday({ day: now.getDate(), weekday: WEEKDAYS_CN[now.getDay()] });
+    setToday({ day: now.getDate(), weekdayIndex: now.getDay() });
 
     /**
      * ⚠️ 为什么还要挂个定时器，而不只在挂载时读一次？
@@ -58,7 +65,7 @@ function useToday(): { day: number; weekday: string } | null {
       if (d !== lastDay) {
         lastDay = d;
         const n = new Date();
-        setToday({ day: n.getDate(), weekday: WEEKDAYS_CN[n.getDay()] });
+        setToday({ day: n.getDate(), weekdayIndex: n.getDay() });
       }
     }, 60_000);
 
@@ -70,6 +77,7 @@ function useToday(): { day: number; weekday: string } | null {
 
 function DateTile() {
   const today = useToday();
+  const { t } = useT();
 
   return (
     <div className="flex w-full flex-col items-start">
@@ -81,7 +89,9 @@ function DateTile() {
         {today ? today.day : "--"}
       </span>
       {today && (
-        <span className="mt-1 text-[11px] leading-none opacity-90">{today.weekday}</span>
+        <span className="mt-1 text-[11px] leading-none opacity-90">
+          {t(WEEKDAY_KEYS[today.weekdayIndex])}
+        </span>
       )}
     </div>
   );
@@ -141,6 +151,7 @@ function ClockTile() {
  *    经典样式，留着能看清磁贴布局在真实内容下的样子。
  */
 function WeatherTile() {
+  const { t } = useT();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
@@ -154,7 +165,7 @@ function WeatherTile() {
           {mounted ? "21°" : "--°"}
         </span>
         <span className="mt-1 text-[10px] leading-none opacity-85">
-          {mounted ? "多云" : "—"}
+          {mounted ? t("tile.weather.cloudy") : t("tile.weather.placeholder")}
         </span>
       </div>
       <span className="text-[22px] leading-none opacity-90">⛅</span>

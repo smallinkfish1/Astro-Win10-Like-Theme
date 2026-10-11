@@ -4,6 +4,7 @@ import { motion } from "motion/react";
 import { useWindowStore, type WinState } from "../../store/windowStore";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import { isImageIcon } from "../../lib/tiles";
+import { useT } from "../../i18n";
 
 const TASKBAR_H = 40;
 
@@ -94,6 +95,7 @@ function WinIcon({ icon, className = "" }: { icon: string; className?: string })
 }
 
 export default function Window({ win, children }: { win: WinState; children?: React.ReactNode }) {
+  const { t } = useT();
   const isMobile = useIsMobile();
   const { close, toggleMinimize, toggleMaximize, move, resize, focus } = useWindowStore();
 
@@ -196,11 +198,19 @@ export default function Window({ win, children }: { win: WinState; children?: Re
     <div
       className="win-drag-handle flex shrink-0 select-none items-center gap-2 px-2 text-[12px]
                  text-[var(--fg-on-acrylic)]"
-      /* 高度用常量而不是 h-8：和下面内容区的 calc(100% - TITLEBAR_H) 绑死，
-         避免两处各写一个数字、改了一处忘了另一处 */
-      style={{ height: TITLEBAR_H }}
       /**
-       * 标题栏用 accent 渐变，这是 Win10 的「彩色标题栏」外观。
+       * ⚠️ 高度用常量而不是 h-8：和下面内容区的 calc(100% - TITLEBAR_H) 绑死，
+       *    避免两处各写一个数字、改了一处忘了另一处。
+       *
+       * ⚠️⚠️ 高度和背景色必须合并在【同一个 style 对象】里。
+       *
+       *    这里曾经写成两个独立的 style 属性（一个给 height、一个给
+       *    background），JSX 里同名属性后者获胜 —— 结果 height 被整条丢掉，
+       *    标题栏高度退化成由内容撑开，和下面 calc(100% - 32px) 对不上，
+       *    内容区会多出一条或裁掉一条。React 只在控制台给一条警告，
+       *    界面看着"差不多正常"，属于很难注意到的那种坏法。
+       *
+       *    背景色用 accent 渐变，这是 Win10 的「彩色标题栏」外观。
        *
        * ⚠️ 这里用的 accent-gradient 是一个 CSS 变量而不是写死的渐变色，
        *    这样暗色模式下它会自动换成更亮一点的蓝（见 global.css 的 .theme-dark）。
@@ -214,7 +224,7 @@ export default function Window({ win, children }: { win: WinState; children?: Re
        *    标题栏是纯色渐变，本来也看不出模糊效果，
        *    所以这里只用纯色，把毛玻璃留给任务栏和开始菜单这两个真正需要的面板。
        */
-      style={{ background: "var(--titlebar-gradient)" }}
+      style={{ height: TITLEBAR_H, background: "var(--titlebar-gradient)" }}
       onDoubleClick={() => !isMobile && toggleMaximize(win.id)}
     >
       <WinIcon icon={win.icon} className="text-[13px]" />
@@ -223,21 +233,21 @@ export default function Window({ win, children }: { win: WinState; children?: Re
       {/* 三个控制按钮：不参与拖拽，所以要加 no-drag */}
       <div className="no-drag flex items-center">
         <button
-          aria-label="最小化"
+          aria-label={t("win.minimize")}
           onClick={() => toggleMinimize(win.id)}
           className="grid h-8 w-11 place-items-center text-white/85 transition-colors hover:bg-white/20"
         >
           {ICONS.minimize}
         </button>
         <button
-          aria-label={win.maximized ? "还原" : "最大化"}
+          aria-label={win.maximized ? t("win.restore") : t("win.maximize")}
           onClick={() => toggleMaximize(win.id)}
           className="no-drag hidden h-8 w-11 place-items-center text-white/85 transition-colors hover:bg-white/20 md:grid"
         >
           {win.maximized ? ICONS.restore : ICONS.maximize}
         </button>
         <button
-          aria-label="关闭"
+          aria-label={t("win.close")}
           onClick={() => close(win.id)}
           className="grid h-8 w-11 place-items-center text-white/85 transition-colors
                      hover:bg-[#e81123] hover:text-white"
@@ -363,8 +373,10 @@ export default function Window({ win, children }: { win: WinState; children?: Re
         ) : (
           <div className="p-4 text-[var(--fg-dim)]">
             <p className="mb-2 text-[15px] font-semibold text-[var(--fg)]">{win.title}</p>
-            <p>这个窗口还没有接上内容。</p>
-            <p className="mt-3 text-[12px] text-[var(--fg-faint)]">URL 路径：{win.path}</p>
+            <p>{t("win.emptyTitle")}</p>
+            <p className="mt-3 text-[12px] text-[var(--fg-faint)]">
+              {t("win.emptyPath", { path: win.path })}
+            </p>
           </div>
         )}
       </div>

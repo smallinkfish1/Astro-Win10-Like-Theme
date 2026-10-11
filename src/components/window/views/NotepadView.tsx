@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from "react";
-import { formatDate, readingTime, renderMarkdown, type ClientPost } from "../../../lib/markdown";
+import { readingMinutes, renderMarkdown, type ClientPost } from "../../../lib/markdown";
+import { useT, fmtDate } from "../../../i18n";
 
 /**
  * 「记事本」窗口 —— 仿 Win10 Notepad 读文章。
@@ -169,6 +170,8 @@ export default function NotepadView({
    *
    * ⚠️ 外面的 initialSlug 优先于随机。
    */
+  const { t, lang, regional } = useT();
+
   const [slug, setSlug] = useState<string>(() => initialSlug ?? pickRandomSlug(posts));
   const [wrap, setWrap] = useState(true);
   /** 菜单栏展开的是哪一项，null 表示都收起 */
@@ -343,7 +346,7 @@ export default function NotepadView({
   if (!article) {
     return (
       <div className="grid h-full place-items-center bg-white text-[12px] text-[#8a94a3]">
-        记事本里还没有内容
+        {t("np.empty")}
       </div>
     );
   }
@@ -351,28 +354,28 @@ export default function NotepadView({
   /** 菜单定义。每一项要么执行一个动作，要么是纯展示项（disabled） */
   const MENUS: { name: string; items: { label: string; run?: () => void; check?: boolean }[] }[] = [
     {
-      name: "文件",
+      name: t("np.file"),
       items: [
-        { label: "新建", run: () => window.open("/posts", "_blank", "noopener") },
+        { label: t("np.new"), run: () => window.open("/posts", "_blank", "noopener") },
         {
-          label: "在静态页打开 ↗",
+          label: t("np.openStatic"),
           run: () => window.open(`/posts/${article.slug}`, "_blank", "noopener,noreferrer"),
         },
         { label: "—" },
-        { label: "退出记事本", run: () => window.dispatchEvent(new CustomEvent("os:close-window")) },
+        { label: t("np.exit"), run: () => window.dispatchEvent(new CustomEvent("os:close-window")) },
       ],
     },
     {
-      name: "编辑",
+      name: t("np.edit"),
       items: [
-        { label: "全选", run: () => areaRef.current?.select() },
-        { label: "复制", run: () => navigator.clipboard?.writeText(text) },
+        { label: t("np.selectAll"), run: () => areaRef.current?.select() },
+        { label: t("np.copy"), run: () => navigator.clipboard?.writeText(text) },
         { label: "—" },
-        { label: "查找…（用浏览器 Ctrl+F）" },
+        { label: t("np.find") },
       ],
     },
     {
-      name: "格式",
+      name: t("np.format"),
       items: [
         /*
           ⚠️ 「自动换行」只在源码视图下有意义。
@@ -381,20 +384,20 @@ export default function NotepadView({
              而不是让它看起来能用但实际没反应。
         */
         {
-          label: "自动换行",
+          label: t("np.wordWrap"),
           check: wrap,
           run: rendered ? undefined : () => setWrap((w) => !w),
         },
         { label: "—" },
         ...FONTS.map((f, i) => ({
-          label: `字体 ${f}px`,
+          label: t("np.font", { size: f }),
           check: i === fontIdx,
           run: () => setFontIdx(i),
         })),
       ],
     },
     {
-      name: "查看",
+      name: t("np.view"),
       items: [
         /*
           ── 视图切换 ──
@@ -413,18 +416,18 @@ export default function NotepadView({
                 光加个 disabled 字段是没用的。
         */
         {
-          label: "渲染视图  (F9)",
+          label: t("np.renderedView"),
           check: rendered,
           run: onlySource ? undefined : () => setRendered(true),
         },
         {
-          label: "源码视图 .md 原文  (F9)",
+          label: t("np.sourceView"),
           check: !rendered,
           run: onlySource ? undefined : () => setRendered(false),
         },
         { label: "—" },
-        { label: "上一篇", run: () => goto(-1) },
-        { label: "下一篇", run: () => goto(1) },
+        { label: t("np.prev"), run: () => goto(-1) },
+        { label: t("np.next"), run: () => goto(1) },
         { label: "—" },
         /*
           ⚠️ 「随机换一篇」用【排除当前这篇】的随机，而不是直接摇。
@@ -437,7 +440,7 @@ export default function NotepadView({
              排除自己之后，只要还有别的文章，点击必有变化。
         */
         {
-          label: "随机换一篇",
+          label: t("np.random"),
           run: () => {
             const others = posts.filter((p) => p.slug !== slug);
             if (!others.length) return;
@@ -447,8 +450,8 @@ export default function NotepadView({
       ],
     },
     {
-      name: "帮助",
-      items: [{ label: "关于记事本", run: () => window.open("/about", "_blank", "noopener") }],
+      name: t("np.help"),
+      items: [{ label: t("np.aboutNotepad"), run: () => window.open("/about", "_blank", "noopener") }],
     },
   ];
 
@@ -521,7 +524,7 @@ export default function NotepadView({
           onChange={(e) => setSlug(e.target.value)}
           className="no-drag ml-auto mr-1 max-w-[220px] rounded border border-[var(--surface-border)]
                      bg-[var(--surface)] px-1.5 py-0.5 text-[11px] outline-none"
-          aria-label="切换文章"
+          aria-label={t("np.switchArticle")}
         >
           {posts.map((p) => (
             <option key={p.slug} value={p.slug}>
@@ -578,8 +581,8 @@ export default function NotepadView({
           */
           aria-label={
             onlySource
-              ? `${article.title} 的 Markdown 原文（只读）`
-              : `${article.title} 的 Markdown 原文`
+              ? t("np.readonlyAria", { title: article.title })
+              : t("np.markdownAria", { title: article.title })
           }
         />
       )}
@@ -589,7 +592,8 @@ export default function NotepadView({
         <span className="truncate">
           {article.title}
           <span className="ml-2 text-[var(--fg-faint)]">
-            {formatDate(article.pubDate)} · {readingTime(article.body)}阅读
+            {fmtDate(article.pubDate, lang, regional)} ·{" "}
+            {t("time.readingTime", { n: readingMinutes(article.body) })}
           </span>
         </span>
 
@@ -600,7 +604,7 @@ export default function NotepadView({
         */}
         {!rendered && (
           <span className="ml-auto shrink-0 tabular-nums">
-            第 {pos.line} 行，第 {pos.col} 列
+            {t("np.lineCol", { line: pos.line, col: pos.col })}
           </span>
         )}
 
@@ -623,9 +627,9 @@ export default function NotepadView({
             className="no-drag rounded px-1.5 py-0.5 transition-colors hover:bg-[var(--hover)]
                        hover:text-[var(--accent)] disabled:cursor-default
                        disabled:hover:bg-transparent disabled:hover:text-[var(--fg-dim)]"
-            title={onlySource ? "回收站里的草稿只能查看源码" : "切换渲染视图 / 源码视图"}
+            title={onlySource ? t("np.toggleTip") : t("np.toggleTipNormal")}
           >
-            {rendered ? "渲染视图" : "源码视图"}
+            {rendered ? t("np.renderedViewShort") : t("np.sourceViewShort")}
           </button>
         </span>
 
@@ -640,15 +644,15 @@ export default function NotepadView({
           <span
             className="shrink-0 rounded bg-[var(--surface-3)] px-1.5 py-px text-[10px]
                        text-[var(--fg-faint)]"
-            title="草稿是未完成的内容，这里只展示原始文件"
+            title={t("np.readonlyTip")}
           >
-            只读
+            {t("np.readonly")}
           </span>
         )}
 
         {!rendered && (
           <span className="shrink-0 text-[var(--fg-faint)]">
-            {wrap ? "自动换行" : "不换行"} · {bytes} 字节
+            {wrap ? t("np.wordWrap") : t("np.wordWrapOff")} · {t("np.bytes", { n: bytes })}
           </span>
         )}
       </div>

@@ -8,6 +8,8 @@ import {
   crumbsOf,
   type FileNode,
 } from "./types";
+import { useT } from "../../../../i18n";
+import type { Dict } from "../../../../i18n/types";
 
 /**
  * 文件管理器外壳。
@@ -71,6 +73,17 @@ export default function FileManagerShell({
   emptyText,
   toolbarExtra,
 }: FileManagerShellProps) {
+  const { t } = useT();
+
+  /**
+   * 节点的显示名。
+   *
+   * ⚠️ 带 nameKey 的走词典，其余原样 —— 见 explorer/types.ts 里的说明。
+   *    文件夹名 / 文章标题是内容，不翻译；只有兜底的「未分类」要翻。
+   */
+  const nodeLabel = (node: FileNode) =>
+    node.nameKey ? t(node.nameKey as keyof Dict) : node.name;
+
   /** 当前所在路径。"/" 是根（此电脑 / 回收站） */
   const [path, setPath] = useState("/");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -114,7 +127,7 @@ export default function FileManagerShell({
     return out;
   }, [tree]);
 
-  const crumbs = crumbsOf(path);
+  const crumbs = crumbsOf(path, rootLabel);
 
   /** 返回上一级。已经在根就什么都不做 */
   const goUp = () => {
@@ -147,19 +160,19 @@ export default function FileManagerShell({
       {/* ══ 1. 菜单栏 ══ */}
       <div className="flex shrink-0 items-center gap-1 border-b border-[var(--surface-border)] bg-[var(--surface-2)] px-2 py-1">
         {[
-          { k: "新建", i: "🗋" },
-          { k: "共享", i: "⇪" },
-          { k: "删除", i: "🗑" },
+          { k: "ex.new" as const, i: "🗋" },
+          { k: "ex.share" as const, i: "⇪" },
+          { k: "ex.delete" as const, i: "🗑" },
         ].map((b) => (
           <button
             key={b.k}
             type="button"
-            title={`${b.k}（演示界面，暂未实现）`}
+            title={t("ex.demoOnly", { name: t(b.k) })}
             className="flex items-center gap-1 rounded px-2 py-1 text-[11px] text-[var(--fg-dim)]
                        transition-colors hover:bg-[var(--hover)]"
           >
             <span className="text-[13px] leading-none">{b.i}</span>
-            {b.k}
+            {t(b.k)}
           </button>
         ))}
 
@@ -176,11 +189,15 @@ export default function FileManagerShell({
              和"另一个是什么"，比一个需要点击才知道含义的按钮清楚。
         */}
         <div className="ml-auto flex items-center rounded border border-[var(--surface-border)] p-0.5">
-          <SegBtn active={view === "folder"} onClick={() => setView("folder")} title="按分类文件夹查看">
-            📁 文件夹
+          <SegBtn
+            active={view === "folder"}
+            onClick={() => setView("folder")}
+            title={t("ex.viewFolderTip")}
+          >
+            📁 {t("ex.viewFolder")}
           </SegBtn>
-          <SegBtn active={view === "flat"} onClick={() => setView("flat")} title="平铺显示全部文章">
-            ☰ 列表
+          <SegBtn active={view === "flat"} onClick={() => setView("flat")} title={t("ex.viewListTip")}>
+            ☰ {t("ex.viewList")}
           </SegBtn>
         </div>
       </div>
@@ -190,7 +207,7 @@ export default function FileManagerShell({
         <button
           type="button"
           onClick={goUp}
-          title="返回上一级"
+          title={t("ex.back")}
           disabled={path === "/" || view === "flat"}
           className="grid h-6 w-6 place-items-center rounded text-[var(--fg-dim)]
                      transition-colors hover:bg-[var(--hover)] disabled:opacity-35"
@@ -204,7 +221,7 @@ export default function FileManagerShell({
           {view === "flat" ? (
             // 平铺视图不分层级，"地址"显示成一句说明更诚实
             <span className="truncate text-[11px] text-[var(--fg-dim)]">
-              {rootLabel} · 全部项目
+              {rootLabel} · {t("ex.allItems")}
             </span>
           ) : (
             crumbs.map((c, i) => (
@@ -230,9 +247,9 @@ export default function FileManagerShell({
         <input
           className="no-drag w-32 shrink-0 rounded border border-[var(--surface-border)] bg-[var(--surface)]
                      px-2 py-1 text-[11px] outline-none focus:border-[var(--accent)]"
-          placeholder={`搜索 ${rootLabel}`}
+          placeholder={`${t("ex.search")} ${rootLabel}`}
           readOnly
-          title="搜索请用开始菜单的搜索框"
+          title={t("ex.searchTip")}
         />
       </div>
 
@@ -266,7 +283,7 @@ export default function FileManagerShell({
             <NavRow
               key={node.id}
               folder
-              label={node.name}
+              label={nodeLabel(node)}
               count={countPosts(node)}
               // ⚠️ 缩进用 padding 而不是 margin：
               //    padding 在盒模型内部，不会把文字挤出容器；
@@ -287,7 +304,7 @@ export default function FileManagerShell({
           <div className="min-h-0 flex-1 overflow-auto">
             {rows.length === 0 ? (
               <div className="grid h-full place-items-center px-6 text-center text-[12px] text-[var(--fg-faint)]">
-                {emptyText ?? "这个文件夹是空的"}
+                {emptyText ?? t("ex.emptyFolder")}
               </div>
             ) : (
               <FileList
@@ -304,14 +321,14 @@ export default function FileManagerShell({
 
           {/* ── 状态栏 ── */}
           <div className="flex shrink-0 items-center gap-3 border-t border-[var(--surface-border)] bg-[var(--surface-2)] px-3 py-1 text-[11px] text-[var(--fg-dim)]">
-            <span>{rows.length} 个项目</span>
+            <span>{t("ex.itemCount", { n: rows.length })}</span>
             {selectedNode && (
               <span className="truncate text-[var(--fg)]">
-                已选中：{selectedNode.name}
+                {t("ex.selected", { name: nodeLabel(selectedNode) })}
               </span>
             )}
             <span className="ml-auto shrink-0 text-[var(--fg-faint)]">
-              {view === "flat" ? "全部项目" : "双击打开"}
+              {view === "flat" ? t("ex.allItems") : t("ex.doubleClickOpen")}
             </span>
           </div>
         </div>

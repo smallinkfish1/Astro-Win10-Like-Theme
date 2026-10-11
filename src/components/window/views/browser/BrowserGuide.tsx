@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { renderMarkdown } from "../../../../lib/markdown";
 import type { Guide } from "../../../../lib/guide";
+import { useT } from "../../../../i18n";
 
 /**
  * 浏览器 → 「使用教程」标签页
@@ -58,6 +59,7 @@ function GuideItem({
 }
 
 export default function BrowserGuide({ guides }: { guides: Guide[] }) {
+  const { t } = useT();
   const [slug, setSlug] = useState<string | null>(guides[0]?.slug ?? null);
 
   const active = useMemo(
@@ -98,10 +100,8 @@ export default function BrowserGuide({ guides }: { guides: Guide[] }) {
       <div className="grid h-full place-items-center text-center text-[12px] text-[var(--fg-faint)]">
         <div>
           <div className="mb-2 text-[28px] leading-none opacity-40">📖</div>
-          还没有教程
-          <div className="mt-1 text-[11px]">
-            在 <code>src/content/guide/</code> 下新建 .md 就会出现在这里
-          </div>
+          {t("bv.noGuides")}
+          <div className="mt-1 text-[11px]">{t("bv.noGuidesHint")}</div>
         </div>
       </div>
     );
@@ -112,7 +112,7 @@ export default function BrowserGuide({ guides }: { guides: Guide[] }) {
       {/* ── 左侧目录 ── */}
       <nav className="w-[150px] shrink-0 overflow-y-auto border-r border-[var(--surface-border)] pr-2">
         <div className="mb-1.5 px-2.5 text-[10.5px] font-semibold uppercase tracking-wider text-[var(--fg-faint)]">
-          目录
+          {t("bv.toc")}
         </div>
         <div className="flex flex-col gap-0.5">
           {guides.map((g) => (

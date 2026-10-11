@@ -1,5 +1,8 @@
 ---
 import DesktopIcon from "./DesktopIcon.astro";
+import { zhCN } from "../../i18n/zh-CN";
+import { en } from "../../i18n/en";
+import type { Dict } from "../../i18n/types";
 
 /**
  * 桌面图标清单 —— 还原 Win10 默认桌面的五个图标。
@@ -19,13 +22,40 @@ import DesktopIcon from "./DesktopIcon.astro";
  *   控制面板 → 外观设置，暗色模式/毛玻璃/动画三个开关（ControlPanelView）
  */
 const icons = [
-  { id: "pc", label: "此电脑", icon: "/icons/pc.png", path: "/archive" },
-  { id: "notepad", label: "记事本", icon: "/icons/notepad.png", path: "/posts" },
-  { id: "browser", label: "浏览器", icon: "/icons/browser.png", path: "/about" },
-  { id: "recycle", label: "回收站", icon: "/icons/recycle.png", path: "/drafts" },
-  { id: "control", label: "控制面板", icon: "/icons/control.png", path: "/settings" },
-];
+  { id: "pc", labelKey: "app.thisPC", icon: "/icons/pc.png", path: "/archive" },
+  { id: "notepad", labelKey: "app.notepad", icon: "/icons/notepad.png", path: "/posts" },
+  { id: "browser", labelKey: "app.browser", icon: "/icons/browser.png", path: "/about" },
+  { id: "recycle", labelKey: "app.recycleBin", icon: "/icons/recycle.png", path: "/drafts" },
+  { id: "control", labelKey: "app.controlPanel", icon: "/icons/control.png", path: "/settings" },
+].map((i) => ({
+  id: i.id,
+  icon: i.icon,
+  path: i.path,
+  // 两份文案都从词典里取，不手抄 —— 免得和窗口内的叫法对不上
+  zh: zhCN[i.labelKey as keyof Dict],
+  en: en[i.labelKey as keyof Dict],
+}));
 ---
+
+{/*
+  ── 关于多语言（本次新增）──
+
+  ⚠️⚠️ 这是整个项目里【唯一不能用 t()】的地方。
+
+     桌面图标是 Astro 在【构建期】渲染出的静态 HTML，不在任何 React 岛屿里 ——
+     它没有 hook、读不到 zustand store，用户切语言时它也不会重渲染。
+
+     所以这里换个办法：把中英两份都写进 HTML，再用纯 CSS 按 <html lang>
+     显示其中一份（规则在 styles/global.css 的 .i18n-zh / .i18n-en）：
+
+         html[lang="zh-CN"] .i18n-en { display: none }
+         其它 lang          .i18n-zh { display: none }
+
+     好处是零 JavaScript —— 静态壳依然是静态壳，而切换语言只改 <html lang>
+     一个属性，图标文字就跟着变了。
+
+     ⚠️ 代价：每个图标多一份隐藏文本。5 个图标 × 几个字，可以接受。
+*/}
 
 {/* 桌面图标区：底部留出任务栏高度，避免图标被压在任务栏下面 */}
 <div class="absolute inset-0 p-3 pb-[calc(var(--taskbar-h)+12px)] pointer-events-none">

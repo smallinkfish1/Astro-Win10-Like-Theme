@@ -2,6 +2,8 @@ import { GRID, SIZE_SPAN } from "../../config/tiles";
 import { isImageIcon, type LaidOutTile } from "../../lib/tiles";
 import type { CSSProperties } from "react";
 import { LiveTileContent } from "./LiveTile";
+import { useT } from "../../i18n";
+import type { Dict } from "../../i18n/types";
 
 /**
  * 单个磁贴。
@@ -33,6 +35,7 @@ export interface TileProps {
 }
 
 export default function Tile({ tile, onActivate, index = 0 }: TileProps) {
+  const { t } = useT();
   const { colSpan, rowSpan } = SIZE_SPAN[tile.size];
   const width = extentOf(colSpan);
   const height = extentOf(rowSpan);
@@ -74,7 +77,17 @@ export default function Tile({ tile, onActivate, index = 0 }: TileProps) {
     ["--i" as string]: index,
   } as CSSProperties;
 
-  const ariaLabel = `${tile.label}${tile.path.startsWith("http") ? "（外部链接）" : ""}`;
+  /**
+   * 磁贴文字。
+   *
+   * ⚠️ 有两种来源，别无脑 t() —— 详见 config/tiles.ts 里
+   *    labelKey / label 两个字段的说明：
+   *      内置磁贴            → labelKey，跟着语言变
+   *      自动追加的分类/标签磁贴 → label，是文章内容，永远保持原文
+   */
+  const text = tile.labelKey ? t(tile.labelKey as keyof Dict) : (tile.label ?? "");
+
+  const ariaLabel = `${text}${tile.path.startsWith("http") ? t("tile.external") : ""}`;
 
   /**
    * ── 图片型磁贴（游戏封面那种）──
@@ -112,7 +125,7 @@ export default function Tile({ tile, onActivate, index = 0 }: TileProps) {
           } font-medium leading-tight [overflow-wrap:anywhere]`}
           style={{ textShadow: "0 1px 2px rgba(0,0,0,.6)" }}
         >
-          {tile.label}
+          {text}
         </span>
       </button>
     );
@@ -146,7 +159,7 @@ export default function Tile({ tile, onActivate, index = 0 }: TileProps) {
           className={`w-full ${isBig ? "text-[13px]" : "text-[11px]"} font-medium leading-tight [overflow-wrap:anywhere]`}
           style={{ textShadow: "0 1px 2px rgba(0,0,0,.4)" }}
         >
-          {tile.label}
+          {text}
         </span>
       </button>
     );
@@ -214,7 +227,7 @@ export default function Tile({ tile, onActivate, index = 0 }: TileProps) {
         className={`w-full ${isBig ? "text-[13px]" : "text-[11px]"} font-medium leading-tight [overflow-wrap:anywhere]`}
         style={{ textShadow: "0 1px 2px rgba(0,0,0,.4)" }}
       >
-        {tile.label}
+        {text}
       </span>
     </button>
   );

@@ -2,11 +2,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   renderMarkdown,
   extractToc,
-  formatDate,
-  readingTime,
+  readingMinutes,
   type ClientPost,
 } from "../../../lib/markdown";
 import Toc from "./Toc";
+import { useT, fmtDate } from "../../../i18n";
 
 /**
  * 窗口内的文章阅读器。
@@ -43,6 +43,7 @@ import Toc from "./Toc";
  *      一行放不下三个字 —— 那还不如没有目录。
  */
 export default function ArticleView({ article }: { article: ClientPost }) {
+  const { t, lang, regional } = useT();
   /**
    * ⚠️ body 可能几千字，渲染一次就够了，别每次重渲染都跑一遍 marked。
    *
@@ -147,9 +148,9 @@ export default function ArticleView({ article }: { article: ClientPost }) {
           </h1>
 
         <div className="md-meta">
-          <span>📅 {formatDate(article.pubDate)}</span>
+          <span>📅 {fmtDate(article.pubDate, lang, regional)}</span>
           <span>·</span>
-          <span>⏱ {readingTime(article.body)}</span>
+          <span>⏱ {t("time.readingTime", { n: readingMinutes(article.body) })}</span>
           <span>·</span>
 
           {/*
@@ -161,7 +162,7 @@ export default function ArticleView({ article }: { article: ClientPost }) {
           <a
             className="md-chip no-drag"
             href={`/category/${encodeURIComponent(article.category)}`}
-            title="按住 Ctrl 点击可在新标签打开静态页"
+            title={t("post.ctrlClickTip")}
             onClick={(e) => {
               if (e.ctrlKey || e.metaKey) return; // 放行默认跳转
               e.preventDefault();
@@ -169,7 +170,7 @@ export default function ArticleView({ article }: { article: ClientPost }) {
                 new CustomEvent("os:open-window", {
                   detail: {
                     id: `category:${article.category}`,
-                    title: `分类：${article.category}`,
+                    title: t("win.categoryTitle", { name: article.category }),
                     icon: "🏷️",
                     path: `/category/${encodeURIComponent(article.category)}`,
                   },
@@ -180,28 +181,32 @@ export default function ArticleView({ article }: { article: ClientPost }) {
             📂 {article.category}
           </a>
 
-          {article.tags.map((t) => (
+          {/*
+            ⚠️ 回调参数叫 tag 而不是 t —— 上面的 t 是翻译函数，
+               用 t 当参数名会把它遮蔽掉。
+          */}
+          {article.tags.map((tag) => (
             <a
-              key={t}
+              key={tag}
               className="md-chip no-drag"
-              href={`/tags/${encodeURIComponent(t)}`}
-              title="按住 Ctrl 点击可在新标签打开静态页"
+              href={`/tags/${encodeURIComponent(tag)}`}
+              title={t("post.ctrlClickTip")}
               onClick={(e) => {
                 if (e.ctrlKey || e.metaKey) return;
                 e.preventDefault();
                 window.dispatchEvent(
                   new CustomEvent("os:open-window", {
                     detail: {
-                      id: `tag:${t}`,
-                      title: `标签：${t}`,
+                      id: `tag:${tag}`,
+                      title: t("win.tagTitle", { name: tag }),
                       icon: "🏷️",
-                      path: `/tags/${encodeURIComponent(t)}`,
+                      path: `/tags/${encodeURIComponent(tag)}`,
                     },
                   })
                 );
               }}
             >
-              #{t}
+              #{tag}
             </a>
           ))}
         </div>
@@ -213,7 +218,7 @@ export default function ArticleView({ article }: { article: ClientPost }) {
       {/* ── 底部提示 ── */}
       <footer className="mt-10 border-t border-[#eceff2] pt-4 text-[12px] text-[#8a94a3]">
         <p>
-          这篇文章也有独立静态页：
+          {t("post.hasStaticPage")}
           <a
             className="no-drag ml-1 text-[#2b579a] hover:underline"
             href={`/posts/${article.slug}`}
@@ -262,10 +267,10 @@ export default function ArticleView({ article }: { article: ClientPost }) {
             onClick={() => setTocOpen((v) => !v)}
             className="no-drag mb-2 flex w-full items-center gap-1 text-[11px] font-semibold
                        text-[#8a94a3] transition-colors hover:text-[#2b579a]"
-            title={tocOpen ? "收起目录" : "展开目录"}
+            title={tocOpen ? t("toc.collapse") : t("toc.expand")}
           >
             <span className="text-[9px]">{tocOpen ? "▼" : "▶"}</span>
-            <span>目录</span>
+            <span>{t("toc.title")}</span>
             <span className="ml-auto text-[10px] font-normal text-[#b6bfca]">{toc.length}</span>
           </button>
 

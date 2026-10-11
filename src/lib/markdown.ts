@@ -605,26 +605,31 @@ export function formatDate(iso: string): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
-/** 相对时间：刚刚 / 3 分钟前 / 2 天前 / 直接显示日期 */
-export function relativeDate(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const min = Math.floor(diff / 60000);
-  if (min < 1) return "刚刚";
-  if (min < 60) return `${min} 分钟前`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr} 小时前`;
-  const day = Math.floor(hr / 24);
-  if (day < 30) return `${day} 天前`;
-  return formatDate(iso);
+/*
+ * ⚠️ 这里原来还有一个 relativeDate()（"3 分钟前"），已经删掉：
+ *    它把中文写死在库函数里，没法跟着界面语言变。窗口内改用
+ *    i18n 的 fmtRelative(iso, t)，文案从词典取。
+ *    （静态页没用到它 —— 它们只显示具体日期。）
+ */
+
+/** 估算阅读时长（中文版，留给静态页）。窗口内请用 readingMinutes + 词典 */
+export function readingTime(body: string): string {
+  return `${readingMinutes(body)} 分钟`;
 }
 
-/** 估算阅读时长：中文约 400 字/分钟，英文约 200 词/分钟 */
-export function readingTime(body: string): string {
+/**
+ * 阅读时长的【分钟数】。
+ *
+ * ⚠️ 为什么不直接用 readingTime()？
+ *    "分钟"这个单位被写死在里面了，英文界面需要 "5 min"。
+ *    所以这里只负责算【数】，单位交给词典
+ *    （time.readingTime = "{n} 分钟阅读" / "{n} min read"）。
+ */
+export function readingMinutes(body: string): number {
   // ⚠️ 同样要先去掉公式：\frac{a}{b} 这类会被算成好几个英文词，
   //    公式多的文章会被估成"读了半小时"，实际正文没多少字。
   const text = stripLatex(body);
   const cn = (text.match(/[\u4e00-\u9fa5]/g) ?? []).length;
   const en = (text.match(/[a-zA-Z]+/g) ?? []).length;
-  const minutes = Math.max(1, Math.round(cn / 400 + en / 200));
-  return `${minutes} 分钟`;
+  return Math.max(1, Math.round(cn / 400 + en / 200));
 }

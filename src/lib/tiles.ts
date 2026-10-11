@@ -55,7 +55,8 @@ export interface LaidOutTile extends TileConfig {
 
 /** 一个排好位置的分组 */
 export interface LaidOutGroup {
-  title: string;
+  /** 分组标题的词典 key（如 "tile.group.create"） */
+  titleKey: string;
   columns: number;
   tiles: LaidOutTile[];
 }
@@ -248,9 +249,9 @@ export function buildTileGroups({
   const colorSeed = { n: 0 };
 
   // ── 1. 手写配置，逐组归一化 ──
-  const groups: { title: string; columns: number; tiles: Omit<LaidOutTile, "pos">[] }[] =
+  const groups: { titleKey: string; columns: number; tiles: Omit<LaidOutTile, "pos">[] }[] =
     TILE_GROUPS.map((g: TileGroup) => ({
-      title: g.title,
+      titleKey: g.titleKey,
       columns: g.columns ?? GRID.columns,
       tiles: normalize(g.tiles, seen, colorSeed),
     }));
@@ -305,7 +306,7 @@ export function buildTileGroups({
 
   // ── 4. 逐组排布坐标 ──
   return groups.map((g) => ({
-    title: g.title,
+    titleKey: g.titleKey,
     columns: g.columns,
     tiles: layoutTiles(g.tiles, g.columns),
   }));

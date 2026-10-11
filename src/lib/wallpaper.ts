@@ -37,8 +37,14 @@ const KEY_WALLPAPER = "win10-blog:wallpaper";
 export interface WallpaperItem {
   /** 存进 localStorage / data-wallpaper 的值 */
   id: string;
-  /** 控制面板里显示的名字 */
-  name: string;
+  /**
+   * 显示名称在词典里的 key（如 "wallpaper.aurora"）。
+   *
+   * ⚠️ 和 config/tiles.ts、config/startMenu.ts 同理：
+   *    这份清单是【模块级常量】，创建时还没有可用的 t()，
+   *    所以这里只放注册名，渲染时才翻译。
+   */
+  nameKey: string;
   /** 亮色版本 */
   light: string;
   /** 暗色版本 */
@@ -57,25 +63,25 @@ export interface WallpaperItem {
 export const WALLPAPERS: WallpaperItem[] = [
   {
     id: "default",
-    name: "默认（Win10 蓝）",
+    nameKey: "wallpaper.default",
     light: "/wallpaper.jpg",
     dark: "/wallpaper-dark.jpg",
   },
   {
     id: "aurora",
-    name: "极光",
+    nameKey: "wallpaper.aurora",
     light: "/wallpapers/aurora.jpg",
     dark: "/wallpapers/aurora-dark.jpg",
   },
   {
     id: "mountains",
-    name: "山脉",
+    nameKey: "wallpaper.mountain",
     light: "/wallpapers/mountains.jpg",
     dark: "/wallpapers/mountains-dark.jpg",
   },
   {
     id: "abstract",
-    name: "抽象几何",
+    nameKey: "wallpaper.geometric",
     light: "/wallpapers/abstract.jpg",
     dark: "/wallpapers/abstract-dark.jpg",
   },

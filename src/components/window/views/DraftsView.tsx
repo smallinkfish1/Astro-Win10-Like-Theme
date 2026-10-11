@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import type { ClientPost } from "../../../lib/markdown";
 import FileManagerShell from "./explorer/FileManagerShell";
 import { buildTree, type FileNode } from "./explorer/types";
+import { useT } from "../../../i18n";
 
 /**
  * 回收站（草稿箱）
@@ -37,6 +38,8 @@ import { buildTree, type FileNode } from "./explorer/types";
  */
 
 export default function DraftsView({ posts }: { posts: ClientPost[] }) {
+  const { t } = useT();
+
   /**
    * 建分类文件夹树。
    *
@@ -100,14 +103,14 @@ export default function DraftsView({ posts }: { posts: ClientPost[] }) {
       tree={tree}
       flatList={flat}
       rootIcon="/icons/recycle.png"
-      rootLabel="回收站"
+      rootLabel={t("app.recycleBin")}
       onOpen={openDraft}
-      emptyText="回收站是空的。在文章 frontmatter 里写 draft: true，它就会出现在这里。"
+      emptyText={t("ex.recycleEmpty")}
       /* 菜单栏右侧的说明。措辞和「此电脑」有意不同 ——
          让"这是没公开的东西"这件事在界面上就能感觉到。 */
       toolbarExtra={
         <span className="text-[11px] text-[#8a94a3]">
-          {posts.length} 篇草稿 · 不会出现在公开列表中
+          {t("ex.draftCount", { n: posts.length })}
         </span>
       }
     />

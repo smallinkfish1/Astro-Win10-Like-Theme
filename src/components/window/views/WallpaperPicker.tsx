@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { WALLPAPERS, type WallpaperItem } from "../../../lib/wallpaper";
+import { useT } from "../../../i18n";
+import type { Dict } from "../../../i18n/types";
 
 /**
  * 壁纸选择器 —— 控制面板「外观」页里的一格。
@@ -66,7 +68,11 @@ function WallpaperCard({
    *      亮色缩略图在暗色主题下依然能看清（卡片有边框和底色），
    *      反过来就不成立。
    */
+  const { t } = useT();
   const [missing, setMissing] = useState(false);
+
+  /** 壁纸名来自词典（清单里存的是 nameKey，见 lib/wallpaper.ts） */
+  const label = t(item.nameKey as keyof Dict);
 
   return (
     <button
@@ -75,7 +81,7 @@ function WallpaperCard({
       disabled={missing}
       onClick={() => onPick(item.id)}
       aria-pressed={active}
-      title={missing ? `${item.name}（图片待补充）` : item.name}
+      title={missing ? t("cp.wallpaperMissing", { name: label }) : label}
       className={`group relative overflow-hidden rounded border text-left transition-all
                   ${
                     active
@@ -95,13 +101,15 @@ function WallpaperCard({
           <div className="grid h-full w-full place-items-center">
             <div className="text-center">
               <div className="text-[16px] leading-none text-[var(--fg-faint)]">＋</div>
-              <div className="mt-1 text-[10.5px] text-[var(--fg-faint)]">待补充</div>
+              <div className="mt-1 text-[10.5px] text-[var(--fg-faint)]">
+                {t("cp.wallpaperPending")}
+              </div>
             </div>
           </div>
         ) : (
           <img
             src={item.thumb ?? item.light}
-            alt={item.name}
+            alt={label}
             loading="lazy"
             decoding="async"
             onError={() => setMissing(true)}
@@ -112,13 +120,15 @@ function WallpaperCard({
       </div>
 
       <div className="flex items-center gap-1 px-2 py-1.5">
-        <span className="truncate text-[11.5px] text-[var(--fg-dim)]">{item.name}</span>
+        <span className="truncate text-[11.5px] text-[var(--fg-dim)]">{label}</span>
         {/* 当前选中给个勾，光靠边框在深色下不够明显 */}
         {active && !missing && (
           <span className="ml-auto shrink-0 text-[11px] text-[var(--accent)]">✓</span>
         )}
         {missing && (
-          <span className="ml-auto shrink-0 text-[10px] text-[var(--fg-faint)]">未就绪</span>
+          <span className="ml-auto shrink-0 text-[10px] text-[var(--fg-faint)]">
+            {t("cp.wallpaperNotReady")}
+          </span>
         )}
       </div>
     </button>
@@ -126,6 +136,8 @@ function WallpaperCard({
 }
 
 export default function WallpaperPicker({ value, onChange }: Props) {
+  const { t } = useT();
+
   return (
     <div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -135,9 +147,7 @@ export default function WallpaperPicker({ value, onChange }: Props) {
       </div>
 
       <p className="mt-3 text-[11px] leading-relaxed text-[var(--fg-faint)]">
-        显示「待补充」的壁纸还缺图片文件 —— 把对应文件放进{" "}
-        <code className="rounded bg-[var(--surface-3)] px-1 py-0.5">public/wallpapers/</code>{" "}
-        即可启用（亮色与暗色各一张，文件名见下方说明）。亮色和暗色主题会自动使用对应的版本。
+        {t("cp.wallpaperHint")}
       </p>
     </div>
   );

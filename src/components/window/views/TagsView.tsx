@@ -1,4 +1,5 @@
 import type { ClientPost } from "../../../lib/markdown";
+import { useT } from "../../../i18n";
 
 export interface TagInfo {
   name: string;
@@ -28,6 +29,8 @@ export default function TagsView({
   filter?: string | null;
   filterType?: "tag" | "category";
 }) {
+  const { t } = useT();
+
   const openPost = (p: ClientPost) => {
     window.dispatchEvent(
       new CustomEvent("os:open-post", {
@@ -42,7 +45,7 @@ export default function TagsView({
       new CustomEvent("os:open-window", {
         detail: {
           id: `${type}:${name}`,
-          title: `${type === "tag" ? "标签" : "分类"}：${name}`,
+          title: type === "tag" ? t("win.tagTitle", { name }) : t("win.categoryTitle", { name }),
           icon: "🏷️",
           path:
             type === "tag"
@@ -61,7 +64,11 @@ export default function TagsView({
     : [];
 
   /** 标签云的相对字号：最少 11px，最多 19px */
-  const maxCount = Math.max(1, ...tags.map((t) => t.count));
+  /**
+   * ⚠️ 回调参数叫 tag 而不是 t ——
+   *    组件作用域里的 t 是翻译函数，再叫 t 会把它遮蔽掉。
+   */
+  const maxCount = Math.max(1, ...tags.map((tag) => tag.count));
   const sizeOf = (n: number) => 11 + Math.round(((n - 1) / Math.max(1, maxCount - 1)) * 8);
 
   return (
@@ -69,26 +76,28 @@ export default function TagsView({
       {/* ── 标签云 ── */}
       <section className="shrink-0">
         <h4 className="mb-2 text-[12px] font-semibold text-[#16202c]">
-          标签云
-          <span className="ml-2 font-normal text-[#8a94a3]">{tags.length} 个</span>
+          {t("tags.cloud")}
+          <span className="ml-2 font-normal text-[#8a94a3]">
+            {t("tags.tagCount", { n: tags.length })}
+          </span>
         </h4>
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1.5">
-          {tags.map((t) => {
-            const active = filterType === "tag" && filter === t.name;
+          {tags.map((tag) => {
+            const active = filterType === "tag" && filter === tag.name;
             return (
               <button
-                key={t.name}
-                onClick={() => openFilter(t.name, "tag")}
-                title={`${t.count} 篇文章`}
-                style={{ fontSize: sizeOf(t.count) }}
+                key={tag.name}
+                onClick={() => openFilter(tag.name, "tag")}
+                title={t("tags.postCount", { n: tag.count })}
+                style={{ fontSize: sizeOf(tag.count) }}
                 className={`no-drag leading-none transition-colors ${
                   active
                     ? "font-semibold text-[#2b579a]"
                     : "text-[#41566f] hover:text-[#2b579a]"
                 }`}
               >
-                #{t.name}
-                <sub className="ml-0.5 text-[9px] text-[#98a1ae]">{t.count}</sub>
+                #{tag.name}
+                <sub className="ml-0.5 text-[9px] text-[#98a1ae]">{tag.count}</sub>
               </button>
             );
           })}
@@ -98,8 +107,10 @@ export default function TagsView({
       {/* ── 分类 ── */}
       <section className="shrink-0">
         <h4 className="mb-2 text-[12px] font-semibold text-[#16202c]">
-          分类
-          <span className="ml-2 font-normal text-[#8a94a3]">{categories.length} 个</span>
+          {t("tags.categories")}
+          <span className="ml-2 font-normal text-[#8a94a3]">
+            {t("tags.categoryCount", { n: categories.length })}
+          </span>
         </h4>
         <div className="flex flex-wrap gap-1.5">
           {categories.map((c) => {
@@ -127,11 +138,13 @@ export default function TagsView({
         <section className="min-h-0 flex-1">
           <h4 className="mb-2 border-b border-[#e6e8eb] pb-1.5 text-[12px] font-semibold text-[#16202c]">
             {filterType === "tag" ? `#${filter}` : filter}
-            <span className="ml-2 font-normal text-[#8a94a3]">{matched.length} 篇</span>
+            <span className="ml-2 font-normal text-[#8a94a3]">
+              {t("post.count", { n: matched.length })}
+            </span>
           </h4>
 
           {matched.length === 0 ? (
-            <div className="py-6 text-center text-[12px] text-[#98a1ae]">没有文章</div>
+            <div className="py-6 text-center text-[12px] text-[#98a1ae]">{t("tags.noPosts")}</div>
           ) : (
             <div className="flex flex-col gap-1.5">
               {matched.map((p) => (

@@ -5,6 +5,7 @@ import {
   isExternal,
   type SocialLink,
 } from "../../../../config/site";
+import { useT } from "../../../../i18n";
 
 /**
  * 浏览器 → 「找到我」标签页
@@ -59,12 +60,13 @@ function SocialIcon({ s }: { s: SocialLink }) {
 }
 
 export default function BrowserSocial() {
+  const { t } = useT();
   const socials = visibleSocials();
 
   if (socials.length === 0) {
     return (
       <div className="grid h-full place-items-center text-[12px] text-[var(--fg-faint)]">
-        还没有配置社交链接
+        {t("bv.noSocials")}
       </div>
     );
   }
@@ -100,9 +102,7 @@ export default function BrowserSocial() {
         })}
       </ul>
 
-      <p className="link-hint">
-        这些链接在 <code>src/config/site.ts</code> 里改。
-      </p>
+      <p className="link-hint">{t("bv.socialHint")}</p>
     </div>
   );
 }

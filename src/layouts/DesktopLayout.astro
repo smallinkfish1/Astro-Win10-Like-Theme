@@ -1,11 +1,22 @@
 ---
 import "../styles/global.css";
 import { THEME_BOOTSTRAP } from "../lib/theme";
+import { KEY_LANG } from "../i18n/store";
 
 interface Props {
   title?: string;
 }
 const { title = "我的桌面" } = Astro.props;
+
+/**
+ * 语言恢复脚本。
+ *
+ * ⚠️ 存储键从 i18n/store.ts 注入，不在这里手抄 ——
+ *    抄错一个字符就是"切了英文、刷新又变回中文"这种很难查的 bug。
+ */
+const LANG_BOOTSTRAP =
+  `try{var l=localStorage.getItem(${JSON.stringify(KEY_LANG)});` +
+  `document.documentElement.lang=l==="en"?"en":"zh-CN";}catch(e){}`;
 ---
 
 <!doctype html>
@@ -35,6 +46,19 @@ const { title = "我的桌面" } = Astro.props;
       和那几个 get*() 函数必须保持判断一致。
     */}
     <script is:inline set:html={THEME_BOOTSTRAP} />
+
+    {/*
+      ⚠️ 语言也得在首帧之前定好，理由和上面主题那段完全一样。
+
+      桌面图标是构建期渲染的静态 HTML，中英两份靠 CSS 按 <html lang> 切换。
+      如果等 React 挂载后才由 hydrateI18n() 去写 lang，
+      用户会先看到中文图标、再"唰"地变成英文 —— 一次可见的闪动。
+      这段脚本在 <head> 解析时就同步跑完，第一帧渲染出来就是对的。
+
+      ⚠️ 它和 i18n/store.ts 里的 hydrateI18n() 判断必须一致：
+        只有读到 "en" 才切成英文，其余（含没存过、值被改坏）一律中文。
+    */}
+    <script is:inline set:html={LANG_BOOTSTRAP} />
   </head>
   <body class="relative h-screen w-screen overflow-hidden">
     {/*

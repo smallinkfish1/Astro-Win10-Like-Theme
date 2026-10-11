@@ -20,6 +20,19 @@
  * ⚠️ 这个文件和 src/config/tiles.ts 是【两个独立配置】：
  *    这个管左边（导航），那个管右边（磁贴）。
  *    互不影响，可以分开改。
+ *
+ * ── 为什么存 nameKey 而不是 name ──
+ *
+ *   这份配置在【模块顶层】就被创建了。那个时刻 React 还没挂载、
+ *   zustand store 还没初始化 —— 在这里调用 t() 会拿到错误的值，
+ *   而且之后用户切语言也【不会重算】（模块只执行一次）。
+ *
+ *   所以配置里只放"注册名"，真正的文字等渲染时再取。
+ *   和 Minecraft 的 lang 文件是同一个思路：代码只认注册名。
+ *
+ * ⚠️⚠️ 由此带来一个连锁影响：下面 buildAlphaGroups() 是按"显示名"
+ *    的首字母分组的，不能再读 nameKey（那会全是 "A"）。
+ *    它现在接收一个 getName 回调，由调用方传入当前语言的取名函数。
  */
 
 /** 左侧列表里的一个条目 */
@@ -27,8 +40,8 @@ export interface MenuItem {
   /** 唯一标识 */
   id: string;
 
-  /** 显示名称 */
-  name: string;
+  /** 显示名称在词典里的 key，例如 "app.notepad" */
+  nameKey: string;
 
   /**
    * 图标。和磁贴一样支持三种写法：
@@ -60,19 +73,19 @@ export interface MenuItem {
 export const RECENTLY_ADDED: MenuItem[] = [
   {
     id: "recent-notepad",
-    name: "记事本",
+    nameKey: "app.notepad",
     icon: "/icons/notepad.png",
     url: "/posts",
   },
   {
     id: "recent-explorer",
-    name: "此电脑",
+    nameKey: "app.thisPC",
     icon: "/icons/pc.png",
     url: "/archive",
   },
   {
     id: "recent-settings",
-    name: "控制面板",
+    nameKey: "app.controlPanel",
     icon: "/icons/control.png",
     url: "/settings",
   },
@@ -88,17 +101,17 @@ export const RECENTLY_ADDED: MenuItem[] = [
  *    手动排的坏处是：加一个条目就要重排一次，而且很容易漏掉。
  */
 export const ALL_APPS: MenuItem[] = [
-  { id: "app-archive", name: "归档", icon: "📅", url: "/archive" },
-  { id: "app-about", name: "关于我", icon: "👤", url: "/about" },
-  { id: "app-bilibili", name: "B站", icon: "📺", url: "https://www.bilibili.com" },
-  { id: "app-browser", name: "浏览器", icon: "/icons/browser.png", url: "/about" },
-  { id: "app-control", name: "控制面板", icon: "/icons/control.png", url: "/settings" },
-  { id: "app-github", name: "GitHub", icon: "🐙", url: "https://github.com" },
-  { id: "app-notepad", name: "记事本", icon: "/icons/notepad.png", url: "/posts" },
-  { id: "app-posts", name: "最新文章", icon: "📚", url: "/posts" },
-  { id: "app-recycle", name: "回收站", icon: "/icons/recycle.png", url: "/drafts" },
-  { id: "app-search", name: "搜索", icon: "🔍", url: "/search" },
-  { id: "app-tags", name: "标签", icon: "#️⃣", url: "/tags" },
+  { id: "app-archive", nameKey: "app.archive", icon: "📅", url: "/archive" },
+  { id: "app-about", nameKey: "app.aboutMe", icon: "👤", url: "/about" },
+  { id: "app-bilibili", nameKey: "app.bilibili", icon: "📺", url: "https://www.bilibili.com" },
+  { id: "app-browser", nameKey: "app.browser", icon: "/icons/browser.png", url: "/about" },
+  { id: "app-control", nameKey: "app.controlPanel", icon: "/icons/control.png", url: "/settings" },
+  { id: "app-github", nameKey: "app.github", icon: "🐙", url: "https://github.com" },
+  { id: "app-notepad", nameKey: "app.notepad", icon: "/icons/notepad.png", url: "/posts" },
+  { id: "app-posts", nameKey: "app.posts", icon: "📚", url: "/posts" },
+  { id: "app-recycle", nameKey: "app.recycleBin", icon: "/icons/recycle.png", url: "/drafts" },
+  { id: "app-search", nameKey: "app.search", icon: "🔍", url: "/search" },
+  { id: "app-tags", nameKey: "app.tags", icon: "#️⃣", url: "/tags" },
 ];
 
 /** 首字母分区：{ letter: "A", items: [...] } */
@@ -110,28 +123,28 @@ export interface AlphaGroup {
 /**
  * 把条目按首字母分组并排序。
  *
- * ⚠️ 首字母怎么取？这里对中英文做了不同处理：
+ * ⚠️⚠️ 它【必须】接收一个 getName 回调，不能自己去读 item.nameKey。
  *
- *    英文/数字  →  取首字符大写，比如 "GitHub" → "G"
- *    中文      →  取拼音首字母？
+ *    因为 nameKey 长这样："app.notepad"、"app.controlPanel" ——
+ *    每个都以 "app." 开头，首字母全是 "a"。
+ *    直接拿它分组的结果是：十一条应用全挤在 "A" 区里，其余字母一个没有。
  *
- *    —— 不是。中文取拼音首字母需要一张完整的拼音表（几千个映射），
- *    为一个开始菜单引入这么大的数据不值得。
+ *    传入 t() 之后，分组和排序都基于【当前语言的实际显示名】：
+ *      中文 → 全部归 "#"（见下方说明）
+ *      英文 → Notepad 进 N 区、Control Panel 进 C 区…
+ *    也就是说切语言时，字母索引会跟着重排 —— 这才是想要的行为。
  *
- *    这里用的是【笔画数近似 + 统归到 "#"】的妥协方案：
- *    所有非 ASCII 开头的条目都归到 "#" 区，排在字母后面。
- *    这样至少不会出现"中文条目混在 A 和 B 中间"的怪现象，
- *    而且分组是稳定的。
- *
- *    如果你真的想要拼音排序，装一个 pinyin 库，
- *    把下面 letter 那行换成 pinyin(name[0]) 开头即可。
+ *    参数给了个默认值（用 key 兜底），只是为了调用方漏传时不至于崩。
  */
-export function buildAlphaGroups(items: MenuItem[] = ALL_APPS): AlphaGroup[] {
+export function buildAlphaGroups(
+  items: MenuItem[] = ALL_APPS,
+  getName: (item: MenuItem) => string = (item) => item.nameKey,
+): AlphaGroup[] {
   const buckets = new Map<string, MenuItem[]>();
 
   for (const item of items) {
     const explicit = item.letter;
-    const first = item.name.trim()[0] ?? "#";
+    const first = getName(item).trim()[0] ?? "#";
 
     // ASCII 字母/数字 → 大写本身；其它（中文、符号）→ "#"
     const letter = (explicit ?? (/[a-zA-Z0-9]/.test(first) ? first.toUpperCase() : "#")).toUpperCase();
@@ -154,6 +167,6 @@ export function buildAlphaGroups(items: MenuItem[] = ALL_APPS): AlphaGroup[] {
   return letters.map((letter) => ({
     letter,
     // 组内也按名称排，保证顺序稳定可预期
-    items: [...buckets.get(letter)!].sort((a, b) => a.name.localeCompare(b.name, "zh")),
+    items: [...buckets.get(letter)!].sort((a, b) => getName(a).localeCompare(getName(b), "zh")),
   }));
 }

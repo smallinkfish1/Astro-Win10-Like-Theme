@@ -5,13 +5,17 @@ import {
   normalizeSection,
   type SettingsSection,
 } from "../../../lib/settings-sections";
+import { useT } from "../../../i18n";
+import type { Dict, Lang } from "../../../i18n/types";
+import { LANG_LABELS, LANGS } from "../../../i18n/types";
+import { useI18nStore } from "../../../i18n/store";
 import WallpaperPicker from "./WallpaperPicker";
 
 /**
  * 控制面板 —— 仿 Win10「设置」的左右分栏布局
  * ================================================================
  *
- *   左：分类导航（外观 / 关于 / 语言 / 更新日志）
+ *   左：分类导航（外观 / 关于 / 语言和区域 / 更新日志）
  *   右：当前分类的设置项
  *
  * 点左边换右边，**在同一个窗口内**切换 —— 不新开窗口。
@@ -23,8 +27,8 @@ import WallpaperPicker from "./WallpaperPicker";
  *
  * ── 关于「实现状态」 ──
  *
- *   已经实现的（外观 / 关于）走真实 UI；
- *   没实现的（语言 / 更新日志）显示「功能开发中…」。
+ *   已经实现的（外观 / 关于 / 语言和区域）走真实 UI；
+ *   没实现的（更新日志）显示「功能开发中…」。
  *
  * ⚠️ 为什么没实现的不干脆隐藏掉？
  *    因为 Win10 的设置面板就是全列的 —— 用户能看见"有这么个东西，
@@ -36,6 +40,14 @@ import WallpaperPicker from "./WallpaperPicker";
  *    不要在组件内部存 state。真实数据源是 <html> 上的 class，
  *    组件里再存一份就会不同步 —— 典型症状是按浏览器后退键回到
  *    这一页时，开关显示的状态是错的。
+ *
+ * ── 这个文件的多语言改造（本次新增） ──
+ *
+ *   所有写死的中文都换成了 t("cp.xxx")。
+ *   ⚠️ 分类的名字比较特殊：它来自 settings-sections.ts 的配置对象，
+ *      而那个对象在【模块顶层】就被创建了 —— 那时还没有 t 可用。
+ *      所以配置里存的是 nameKey（key 字符串），在这里才 t(s.nameKey)。
+ *      详见 settings-sections.ts 里对 nameKey 的说明。
  */
 
 /** 一行设置项：左边标题+说明，右边开关 */
@@ -135,6 +147,52 @@ function SegmentedRow({
   );
 }
 
+/**
+ * 下拉选择行（语言用的就是这个）。
+ *
+ * ⚠️ 为什么单独做一个，不复用 SegmentedRow？
+ *    因为分段控件在选项多于 2~3 个时会挤成一排小按钮，很难点；
+ *    而语言未来是要扩展的（日、韩…），下拉能容纳任意多。
+ *    在只有两种语言时看着有点"重"，但省下了以后重做布局的成本。
+ */
+function SelectRow({
+  title,
+  desc,
+  options,
+  value,
+  onChange,
+}: {
+  title: string;
+  desc: string;
+  options: { id: string; name: string }[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  return (
+    <div className="flex items-center gap-4 py-3">
+      <div className="min-w-0 flex-1">
+        <div className="text-[13px] text-[var(--fg)]">{title}</div>
+        <div className="mt-0.5 text-[11.5px] leading-relaxed text-[var(--fg-faint)]">{desc}</div>
+      </div>
+
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label={title}
+        className="min-w-[130px] shrink-0 rounded border border-[var(--surface-border)]
+                   bg-[var(--surface)] px-2 py-1 text-[12px] text-[var(--fg)] outline-none
+                   transition-colors focus:border-[var(--accent)]"
+      >
+        {options.map((o) => (
+          <option key={o.id} value={o.id}>
+            {o.name}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 /** 段落小标题 */
 function GroupTitle({ children }: { children: React.ReactNode }) {
   return (
@@ -146,14 +204,15 @@ function GroupTitle({ children }: { children: React.ReactNode }) {
 
 /** 未实现分类的占位内容 */
 function PlaceholderPage({ section }: { section: SettingsSection }) {
+  const { t } = useT();
   return (
     <div className="grid h-full min-h-[220px] place-items-center">
       <div className="text-center">
         <div className="text-[32px] leading-none opacity-40">{section.icon}</div>
-        <div className="mt-4 text-[14px] text-[var(--fg)]">{section.name}</div>
-        <div className="mt-2 text-[12.5px] text-[var(--fg-dim)]">功能开发中…</div>
+        <div className="mt-4 text-[14px] text-[var(--fg)]">{t(section.nameKey as keyof Dict)}</div>
+        <div className="mt-2 text-[12.5px] text-[var(--fg-dim)]">{t("cp.inDevelopment")}</div>
         <p className="mx-auto mt-4 max-w-[320px] text-[11.5px] leading-relaxed text-[var(--fg-faint)]">
-          {section.desc}
+          {t(section.descKey as keyof Dict)}
         </p>
       </div>
     </div>
@@ -175,19 +234,20 @@ function AppearancePage() {
     setWallpaperMode,
     reset,
   } = useAppearance();
+  const { t } = useT();
 
   return (
     <div className="flex flex-col gap-3">
       <section>
-        <h3 className="text-[15px] font-semibold text-[var(--fg)]">外观</h3>
+        <h3 className="text-[15px] font-semibold text-[var(--fg)]">{t("cp.nav.appearance")}</h3>
         <p className="mt-1 text-[12.5px] leading-relaxed text-[var(--fg-dim)]">
-          这里的每一项都会立刻生效，并且保存在浏览器本地 —— 下次打开还记得。
+          {t("cp.appearance.lead")}
         </p>
       </section>
 
       {/* ── 壁纸 ── */}
       <section className="border-t border-[var(--surface-border)] pt-3">
-        <GroupTitle>壁纸</GroupTitle>
+        <GroupTitle>{t("cp.wallpaper")}</GroupTitle>
         <div className="mt-2">
           <WallpaperPicker value={wallpaper} onChange={setWallpaperMode} />
         </div>
@@ -195,22 +255,22 @@ function AppearancePage() {
 
       {/* ── 颜色 ── */}
       <section className="border-t border-[var(--surface-border)] pt-3">
-        <GroupTitle>颜色</GroupTitle>
+        <GroupTitle>{t("cp.colors")}</GroupTitle>
 
         <SegmentedRow
-          title="应用模式"
-          desc="整个桌面、窗口、开始菜单都跟着切换配色。"
+          title={t("cp.appMode")}
+          desc={t("cp.appModeDesc")}
           options={[
-            { id: "light", name: "亮色" },
-            { id: "dark", name: "暗色" },
+            { id: "light", name: t("cp.light") },
+            { id: "dark", name: t("cp.dark") },
           ]}
           value={theme}
           onChange={(id) => setThemeMode(id as "light" | "dark")}
         />
 
         <ToggleRow
-          title="开始菜单深色"
-          desc="只把开始菜单压成深色亚克力，不影响任务栏和窗口。这就是 Win10 最经典的那个开始菜单观感。"
+          title={t("cp.startMenuDark")}
+          desc={t("cp.startMenuDarkDesc")}
           value={menuDark}
           onChange={toggleMenuDark}
         />
@@ -218,18 +278,18 @@ function AppearancePage() {
 
       {/* ── 效果 ── */}
       <section className="border-t border-[var(--surface-border)] pt-3">
-        <GroupTitle>效果</GroupTitle>
+        <GroupTitle>{t("cp.effects")}</GroupTitle>
 
         <ToggleRow
-          title="毛玻璃效果"
-          desc="任务栏和开始菜单的半透明模糊材质。关闭后改为不透明底色，在低配设备上更流畅。"
+          title={t("cp.acrylic")}
+          desc={t("cp.acrylicDesc")}
           value={acrylic}
           onChange={toggleAcrylic}
         />
 
         <ToggleRow
-          title="界面动画"
-          desc="窗口缩放、开始菜单滑入、磁贴悬停等动效。关闭后所有过渡立即完成。"
+          title={t("cp.anim")}
+          desc={t("cp.animDesc")}
           value={anim}
           onChange={toggleAnim}
         />
@@ -244,11 +304,9 @@ function AppearancePage() {
                      text-[var(--fg-dim)] transition-colors
                      hover:bg-[var(--hover)] hover:text-[var(--fg)]"
         >
-          恢复默认设置
+          {t("cp.reset")}
         </button>
-        <span className="ml-3 text-[11px] text-[var(--fg-faint)]">
-          （壁纸、配色、毛玻璃、动画、开始菜单全部复位）
-        </span>
+        <span className="ml-3 text-[11px] text-[var(--fg-faint)]">{t("cp.resetHint")}</span>
       </section>
     </div>
   );
@@ -256,42 +314,97 @@ function AppearancePage() {
 
 /** 「关于」页 */
 function AboutPage() {
-  const rows = [
-    { k: "定位", v: "一个 Windows 10 风格的个人博客桌面" },
-    { k: "技术栈", v: "Astro + React 岛屿 + Zustand + Tailwind" },
-    { k: "主题体系", v: "CSS 变量 + <html> 上的 class / data 属性" },
-    { k: "文章渲染", v: "Markdown → KaTeX（公式）+ 代码高亮" },
-    { k: "数据来源", v: "构建期读取 content collection，运行时只做展示" },
+  const { t } = useT();
+
+  const rows: { k: keyof Dict; v: keyof Dict }[] = [
+    { k: "cp.kb.position", v: "cp.v.position" },
+    { k: "cp.kb.stack", v: "cp.v.stack" },
+    { k: "cp.kb.theming", v: "cp.v.theming" },
+    { k: "cp.kb.render", v: "cp.v.render" },
+    { k: "cp.kb.data", v: "cp.v.data" },
   ];
 
   return (
     <div className="flex flex-col gap-3">
       <section>
-        <h3 className="text-[15px] font-semibold text-[var(--fg)]">关于</h3>
+        <h3 className="text-[15px] font-semibold text-[var(--fg)]">{t("cp.nav.about")}</h3>
         <p className="mt-1 text-[12.5px] leading-relaxed text-[var(--fg-dim)]">
-          这个桌面把博客做成了一个操作系统的样子 —— 但不是为了好玩：
-          每篇文章依然是独立、可被搜索引擎抓取的静态页，桌面只是站内导航的第二副面孔。
+          {t("cp.aboutLead")}
         </p>
       </section>
 
       <section className="border-t border-[var(--surface-border)] pt-3">
-        <GroupTitle>概况</GroupTitle>
+        <GroupTitle>{t("cp.overview")}</GroupTitle>
         <dl className="mt-2 divide-y divide-[var(--surface-border)]">
           {rows.map((r) => (
             <div key={r.k} className="flex gap-4 py-2">
-              <dt className="w-[76px] shrink-0 text-[12px] text-[var(--fg-faint)]">{r.k}</dt>
-              <dd className="min-w-0 flex-1 text-[12.5px] text-[var(--fg-dim)]">{r.v}</dd>
+              <dt className="w-[76px] shrink-0 text-[12px] text-[var(--fg-faint)]">{t(r.k)}</dt>
+              <dd className="min-w-0 flex-1 text-[12.5px] text-[var(--fg-dim)]">{t(r.v)}</dd>
             </div>
           ))}
         </dl>
       </section>
 
       <section className="border-t border-[var(--surface-border)] pt-3">
-        <GroupTitle>说明</GroupTitle>
+        <GroupTitle>{t("cp.notes")}</GroupTitle>
         <ul className="mt-2 space-y-1.5 text-[11.5px] leading-relaxed text-[var(--fg-faint)]">
-          <li>· 设置存放在浏览器 localStorage，清除浏览器数据会重置，换设备不会同步。</li>
-          <li>· 首次访问自动跟随系统的亮色/暗色偏好；手动设置过之后以你的选择为准。</li>
-          <li>· 开启「界面动画」时，若系统设置了「减少动态效果」，浏览器会优先尊重系统。</li>
+          <li>{t("cp.note1")}</li>
+          <li>{t("cp.note2")}</li>
+          <li>{t("cp.note3")}</li>
+        </ul>
+      </section>
+    </div>
+  );
+}
+
+/**
+ * 「语言和区域」页 —— 本次新增的功能主体。
+ *
+ * ⚠️ 这个页面是语言切换的【唯一入口】。它做两件事：
+ *      1. 下拉选语言  → useI18nStore.setLang()，立刻全局生效
+ *      2. 地区格式开关 → useI18nStore.setRegional()
+ *
+ * ⚠️⚠️ 语言下拉的值直接写进 zustand store，不是本地 state。
+ *      因为它影响的是【整个桌面】，包括另一个岛屿里的任务栏 ——
+ *      只有全局 store 能穿透 island 边界把变更广播出去。
+ *      这也正是这个功能能用而被做出来的全部原因。
+ */
+function LanguagePage() {
+  const { t } = useT();
+  const lang = useI18nStore((s) => s.lang);
+  const regional = useI18nStore((s) => s.regional);
+  const setLang = useI18nStore((s) => s.setLang);
+  const setRegional = useI18nStore((s) => s.setRegional);
+
+  return (
+    <div className="flex flex-col gap-3">
+      <section>
+        <h3 className="text-[15px] font-semibold text-[var(--fg)]">{t("lang.title")}</h3>
+        <p className="mt-1 text-[12.5px] leading-relaxed text-[var(--fg-dim)]">{t("lang.lead")}</p>
+      </section>
+
+      <section className="border-t border-[var(--surface-border)] pt-3">
+        <SelectRow
+          title={t("lang.displayLanguage")}
+          desc={t("lang.displayLanguageDesc")}
+          options={LANGS.map((l) => ({ id: l, name: LANG_LABELS[l] }))}
+          value={lang}
+          onChange={(id) => setLang(id as Lang)}
+        />
+
+        <ToggleRow
+          title={t("lang.regionalFormat")}
+          desc={t("lang.regionalFormatDesc")}
+          value={regional}
+          onChange={() => setRegional(!regional)}
+        />
+      </section>
+
+      <section className="border-t border-[var(--surface-border)] pt-3">
+        <ul className="space-y-1.5 text-[11.5px] leading-relaxed text-[var(--fg-faint)]">
+          <li>{t("lang.note1")}</li>
+          <li>{t("lang.note2")}</li>
+          <li>{t("lang.note3")}</li>
         </ul>
       </section>
     </div>
@@ -299,6 +412,8 @@ function AboutPage() {
 }
 
 export default function ControlPanelView({ section }: { section?: string }) {
+  const { t } = useT();
+
   /**
    * 当前分类。
    *
@@ -347,7 +462,7 @@ export default function ControlPanelView({ section }: { section?: string }) {
     <div className="flex h-full min-h-0">
       {/* ────────────────── 左：分类导航 ────────────────── */}
       <nav
-        aria-label="控制面板分类"
+        aria-label={t("cp.navAria")}
         className="flex w-[168px] shrink-0 flex-col gap-0.5 overflow-y-auto
                    border-r border-[var(--surface-border)] bg-[var(--surface-2)] p-2"
       >
@@ -381,14 +496,14 @@ export default function ControlPanelView({ section }: { section?: string }) {
                   on ? "text-[var(--fg)]" : "text-[var(--fg-dim)]"
                 }`}
               >
-                {s.name}
+                {t(s.nameKey as keyof Dict)}
               </span>
               {/* 未实现的给个浅色小点，比整项置灰更轻 */}
               {!s.ready && (
                 <span
                   aria-hidden="true"
                   className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--fg-faint)] opacity-50"
-                  title="开发中"
+                  title={t("cp.inDevelopment")}
                 />
               )}
             </button>
@@ -396,7 +511,7 @@ export default function ControlPanelView({ section }: { section?: string }) {
         })}
 
         <div className="mt-auto px-2.5 pt-2 text-[10.5px] leading-relaxed text-[var(--fg-faint)]">
-          设置保存在本机浏览器
+          {t("cp.savedLocally")}
         </div>
       </nav>
 
@@ -404,6 +519,7 @@ export default function ControlPanelView({ section }: { section?: string }) {
       <div className="min-w-0 flex-1 overflow-y-auto p-4">
         {active.id === "appearance" && <AppearancePage />}
         {active.id === "about" && <AboutPage />}
+        {active.id === "language" && <LanguagePage />}
         {!active.ready && <PlaceholderPage section={active} />}
       </div>
     </div>

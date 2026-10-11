@@ -32,6 +32,24 @@ export interface SettingsSection {
   /** 一句话说明，静态页和导航悬浮提示都会用 */
   desc: string;
   /**
+   * 文案在词典里的 key。
+   *
+   * ⚠️⚠️ 为什么要有这个字段，而不是直接用 name / desc？
+   *
+   *   因为 name / desc 是【构建期就定死的中文】——
+   *   这份配置同时被 Astro 静态页（构建期，没有 React、没有 store）
+   *   和 React 窗口（运行时，能切语言）两处消费。
+   *
+   *   静态页那边读 name，保持中文不变（第一版静态页不参与切换）；
+   *   窗口那边读 nameKey，走 t() 就能跟着语言变。
+   *
+   *   ⚠️ 两边用【两份数据】的代价是可能漂移 ——
+   *      所以这里的 name/desc 和词典里的 zh 词条必须保持一致。
+   *      verify-i18n.mjs 里有一条断言专门盯着这件事。
+   */
+  nameKey: string;
+  descKey: string;
+  /**
    * 是否已经实现。
    *
    * ⚠️ 用数据标记而不是在组件里 if (id === 'appearance') 判断。
@@ -53,29 +71,37 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   {
     id: "appearance",
     name: "外观",
+    nameKey: "cp.nav.appearance",
     icon: "🎨",
     desc: "壁纸、亮色/暗色模式、毛玻璃、动画与开始菜单配色。",
+    descKey: "cp.desc.appearance",
     ready: true,
   },
   {
     id: "about",
     name: "关于",
+    nameKey: "cp.nav.about",
     icon: "ℹ️",
     desc: "这个桌面主题的技术栈、设计取舍与实现说明。",
+    descKey: "cp.desc.about",
     ready: true,
   },
   {
     id: "language",
-    name: "语言",
+    name: "语言和区域",
+    nameKey: "cp.nav.language",
     icon: "🌐",
     desc: "界面语言与地区格式。",
-    ready: false,
+    descKey: "cp.desc.language",
+    ready: true,
   },
   {
     id: "changelog",
     name: "更新日志",
+    nameKey: "cp.nav.changelog",
     icon: "📜",
     desc: "这个主题每个阶段做了什么。",
+    descKey: "cp.desc.changelog",
     ready: false,
   },
 ];

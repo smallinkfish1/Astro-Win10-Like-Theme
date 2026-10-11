@@ -3,11 +3,14 @@ import { isImageIcon } from "../../lib/tiles";
 
 interface Props {
   id: string;
-  label: string;
+  /** 中文名。构建期从词典取，见 Desktop.astro 的说明 */
+  zh: string;
+  /** 英文名。同上 */
+  en: string;
   icon: string;
   path: string;
 }
-const { id, label, icon, path } = Astro.props;
+const { id, zh, en, icon, path } = Astro.props;
 
 /**
  * 一个图标要么是 emoji（"🖥️"），要么是图片地址（"/icons/pc.png"）。
@@ -24,9 +27,8 @@ const useImage = isImageIcon(icon);
          focus:bg-white/25 focus:outline-none"
   tabindex="0"
   role="button"
-  aria-label={label}
   data-icon-id={id}
-  data-title={label}
+  data-title={zh}
   data-icon={icon}
   data-path={path}
 >
@@ -46,11 +48,25 @@ const useImage = isImageIcon(icon);
       )
     }
   </div>
+  {/*
+    ⚠️ 中英两份都渲染，靠 CSS 按 <html lang> 显示其中一份
+       （规则在 global.css，来龙去脉见 Desktop.astro 顶部）。
+
+    ⚠️⚠️ 这里【故意不加】 aria-label。
+
+       去掉它之后，role="button" 的可访问名就来自【可见文本】，
+       而被 display:none 隐藏的那一份不会进入可访问性树 ——
+       于是屏幕阅读器读到的永远是当前语言的那一份。
+
+       反过来，如果硬写一个 aria-label，它只能是一种语言，
+       等于把可访问名锁死了，切语言时不会跟着变。
+  */}
   <span
     class="text-center text-[12px] leading-tight text-white
            [text-shadow:0_1px_3px_rgba(0,0,0,.95)]"
   >
-    {label}
+    <span class="i18n-zh" lang="zh-CN">{zh}</span>
+    <span class="i18n-en" lang="en">{en}</span>
   </span>
 </div>
 

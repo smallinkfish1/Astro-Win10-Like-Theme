@@ -5,10 +5,13 @@ import type { TagInfo } from "../window/views/TagsView";
 import { buildTileGroups, isExternal, isImageIcon, type LaidOutTile } from "../../lib/tiles";
 import {
   RECENTLY_ADDED,
+  ALL_APPS,
   buildAlphaGroups,
   type MenuItem,
 } from "../../config/startMenu";
 import TileGrid from "./TileGrid";
+import { useT } from "../../i18n";
+import type { Dict } from "../../i18n/types";
 
 /**
  * Win10 开始菜单。
@@ -95,6 +98,8 @@ const menuTransition = {
    ──────────────────────────────────────────────────────────── */
 
 function NavRow({ item, onClick }: { item: MenuItem; onClick: (item: MenuItem) => void }) {
+  const { t } = useT();
+
   return (
     <button
       type="button"
@@ -114,7 +119,7 @@ function NavRow({ item, onClick }: { item: MenuItem; onClick: (item: MenuItem) =
                  active:bg-[var(--hover-invert-strong)]"
     >
       <NavIcon icon={item.icon} />
-      <span className="truncate">{item.name}</span>
+      <span className="truncate">{t(item.nameKey as keyof Dict)}</span>
     </button>
   );
 }
@@ -139,6 +144,7 @@ export interface StartMenuProps {
 }
 
 export default function StartMenu({ categories, tags }: StartMenuProps) {
+  const { t } = useT();
   const open = useWindowStore((s) => s.open);
   const setStartMenu = useWindowStore((s) => s.setStartMenu);
 
@@ -159,13 +165,23 @@ export default function StartMenu({ categories, tags }: StartMenuProps) {
       return;
     }
 
-    open({ id: item.id, title: item.name, icon: item.icon, path: item.url });
+    open({ id: item.id, title: t(item.nameKey as keyof Dict), icon: item.icon, path: item.url });
 
     if (window.location.pathname !== item.url) {
       window.history.replaceState({ path: item.url }, "", item.url);
     }
     setStartMenu(false);
   };
+
+  /**
+   * 磁贴文字的取值函数。
+   *
+   * ⚠️ 和 Tile.tsx 里是同一个逻辑，说明见 config/tiles.ts：
+   *    labelKey（内置磁贴）        → 翻译，跟着语言变
+   *    label（自动追加的分类/标签）→ 原样，是文章内容
+   */
+  const tileText = (tile: LaidOutTile) =>
+    tile.labelKey ? t(tile.labelKey as keyof Dict) : (tile.label ?? "");
 
   /** 点磁贴：站内开窗口，外链新标签页 */
   const activateTile = (tile: LaidOutTile) => {
@@ -178,7 +194,7 @@ export default function StartMenu({ categories, tags }: StartMenuProps) {
 
     open({
       id: tile.id,
-      title: tile.label,
+      title: tileText(tile),
       icon: tile.icon,
       path: tile.path,
       // 宽/大磁贴对应大一点的窗口，视觉上有关联
@@ -206,11 +222,16 @@ export default function StartMenu({ categories, tags }: StartMenuProps) {
   /**
    * 字母索引分组。
    *
-   * ⚠️ 依赖 ALL_APPS 这个模块级常量（不随渲染变化），
-   *    所以这里用 useMemo 且依赖数组为空。
-   *    如果以后 ALL_APPS 改成从 props 传进来，记得把它加进依赖。
+   * ⚠️⚠️ 必须把 t() 传进去 —— 分组是按「显示名」的首字母算的，
+   *    而配置里存的是 nameKey（"app.notepad"），每一条都以 "app." 开头。
+   *    不传的话十一条应用会全部挤进 "A" 区。详见 config/startMenu.ts。
+   *
+   * ⚠️ 这里【故意不用 useMemo】：
+   *    结果依赖当前语言，语言一变就该重算；而 useT() 每次渲染返回新的
+   *    t 函数，拿它当依赖会让 useMemo 每次失效（等于没做记忆化）。
+   *    何况它只处理十几个条目，重算的开销可以忽略。
    */
-  const alphaGroups = useMemo(() => buildAlphaGroups(), []);
+  const alphaGroups = buildAlphaGroups(ALL_APPS, (item) => t(item.nameKey as keyof Dict));
 
   const tileCount = tileGroups.reduce((n, g) => n + g.tiles.length, 0);
 
@@ -265,7 +286,7 @@ export default function StartMenu({ categories, tags }: StartMenuProps) {
         {/* 滚动区：条目多的时候能滚，但两个区域是一起滚的 */}
         <div className="startmenu-scroll min-h-0 flex-1 overflow-y-auto py-2">
           {/* ── 最近添加 ── */}
-          <div className="px-4 pb-1 pt-1 text-[11px] opacity-55">最近添加</div>
+          <div className="px-4 pb-1 pt-1 text-[11px] opacity-55">{t("menu.recentlyAdded")}</div>
           {RECENTLY_ADDED.map((item) => (
             <NavRow key={item.id} item={item} onClick={goto} />
           ))}
@@ -282,7 +303,7 @@ export default function StartMenu({ categories, tags }: StartMenuProps) {
                        transition-colors duration-150 hover:bg-[var(--hover-invert)]
                        focus:outline-none focus-visible:bg-[var(--hover-invert)]"
           >
-            <span className="truncate">{expanded ? "收起" : "展开"}</span>
+            <span className="truncate">{expanded ? t("menu.collapse") : t("menu.expand")}</span>
             {/*
               箭头旋转 180° 表示展开/收起。
               用 CSS 的 rotate 而不是换一个字符（▲/▼）——
@@ -327,9 +348,9 @@ export default function StartMenu({ categories, tags }: StartMenuProps) {
              比如磁贴排不下被跳过时，用户能看到总数对不对得上。
         */}
         <p className="mt-3 text-[10.5px] leading-relaxed opacity-40">
-          共 {tileCount} 个磁贴
+          {t("menu.tileCount", { n: tileCount })}
           {" · "}
-          改 <code>src/config/tiles.ts</code> 增删
+          {t("menu.tileCountHint")}
         </p>
       </div>
     </motion.div>

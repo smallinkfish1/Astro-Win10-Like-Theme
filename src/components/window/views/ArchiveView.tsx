@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { formatDate } from "../../../lib/markdown";
 import type { ClientPost } from "../../../lib/markdown";
+import { useT } from "../../../i18n";
 
 /**
  * 归档视图（对应桌面上的"此电脑"）。
@@ -12,6 +13,8 @@ import type { ClientPost } from "../../../lib/markdown";
  * 交互上模仿资源管理器的「详细信息」视图：可排序列、可展开折叠。
  */
 export default function ArchiveView({ posts }: { posts: ClientPost[] }) {
+  const { t } = useT();
+
   /** 按年分组 */
   const years = useMemo(() => {
     const map = new Map<number, ClientPost[]>();
@@ -49,7 +52,7 @@ export default function ArchiveView({ posts }: { posts: ClientPost[] }) {
   if (posts.length === 0) {
     return (
       <div className="grid h-full place-items-center text-[12px] text-[#98a1ae]">
-        归档为空
+        {t("archive.empty")}
       </div>
     );
   }
@@ -59,9 +62,9 @@ export default function ArchiveView({ posts }: { posts: ClientPost[] }) {
       {/* 表头：模仿资源管理器的列头 */}
       <div className="mb-1 flex shrink-0 items-center gap-3 border-b border-[#e6e8eb] px-2 pb-1.5
                       text-[11px] font-medium text-[#6b7280]">
-        <span className="flex-1">名称</span>
-        <span className="w-20 shrink-0">分类</span>
-        <span className="w-20 shrink-0 text-right">修改日期</span>
+        <span className="flex-1">{t("ex.name")}</span>
+        <span className="w-20 shrink-0">{t("post.categoryLabel")}</span>
+        <span className="w-20 shrink-0 text-right">{t("ex.dateModified")}</span>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto pr-1">
@@ -78,9 +81,11 @@ export default function ArchiveView({ posts }: { posts: ClientPost[] }) {
                 <span className="w-3 text-[9px] text-[#8a94a3]">
                   {isCollapsed ? "▶" : "▼"}
                 </span>
-                <span className="text-[13px] font-semibold text-[#16202c]">{year} 年</span>
+                <span className="text-[13px] font-semibold text-[#16202c]">
+                  {t("archive.yearUnit", { n: year })}
+                </span>
                 <span className="text-[11px] text-[#98a1ae]">
-                  {list.length} 篇 · {months} 个月
+                  {t("post.count", { n: list.length })} · {t("archive.monthUnit", { n: months })}
                 </span>
               </button>
 
@@ -91,7 +96,7 @@ export default function ArchiveView({ posts }: { posts: ClientPost[] }) {
                     key={p.slug}
                     role="button"
                     tabIndex={0}
-                    aria-label={`打开 ${p.title}`}
+                    aria-label={t("post.openAria", { title: p.title })}
                     onDoubleClick={() => openPost(p)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
@@ -121,7 +126,7 @@ export default function ArchiveView({ posts }: { posts: ClientPost[] }) {
       </div>
 
       <div className="mt-2 shrink-0 border-t border-[#eceff2] pt-2 text-[11px] text-[#98a1ae]">
-        共 {posts.length} 篇 · 双击可在窗口中打开
+        {t("archive.footer", { n: posts.length })}
       </div>
     </div>
   );

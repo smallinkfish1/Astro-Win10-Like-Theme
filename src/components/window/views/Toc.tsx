@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { TocItem } from "../../../lib/markdown";
+import { useT } from "../../../i18n";
 
 /**
  * 文章目录（TOC）侧栏。
@@ -88,6 +89,7 @@ export default function Toc({
   items: TocItem[];
   scrollRef: React.RefObject<HTMLElement | null>;
 }) {
+  const { t } = useT();
   const [activeId, setActiveId] = useState<string>(items[0]?.id ?? "");
   /** 目录自己的高亮项要跟着滚动，否则读到底部时目录里选中的项已经在可视区外了 */
   const listRef = useRef<HTMLUListElement>(null);
@@ -221,8 +223,8 @@ export default function Toc({
   };
 
   return (
-    <nav className="toc" aria-label="文章目录">
-      <div className="toc-title">目录</div>
+    <nav className="toc" aria-label={t("toc.aria")}>
+      <div className="toc-title">{t("toc.title")}</div>
       <ul className="toc-list" ref={listRef}>
         {items.map((it) => (
           <li

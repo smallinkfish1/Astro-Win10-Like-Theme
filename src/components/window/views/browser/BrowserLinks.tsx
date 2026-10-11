@@ -4,6 +4,7 @@ import {
   friendAvatarSrc,
   type FriendLink,
 } from "../../../../config/links";
+import { useT } from "../../../../i18n";
 
 /**
  * 浏览器 → 「友情链接」标签页
@@ -64,12 +65,13 @@ function FriendAvatar({ link }: { link: FriendLink }) {
 }
 
 export default function BrowserLinks() {
+  const { t } = useT();
   const links = visibleFriendLinks();
 
   if (links.length === 0) {
     return (
       <div className="grid h-full place-items-center text-[12px] text-[var(--fg-faint)]">
-        还没有友情链接
+        {t("bv.noFriendLinks")}
       </div>
     );
   }
@@ -110,9 +112,7 @@ export default function BrowserLinks() {
         自解释提示：让人知道这些数据在哪改。
         教程 03 那篇讲的就是这件事 —— 与其让人去翻文档，不如直接写在页面上。
       */}
-      <p className="link-hint">
-        想加减友链？改 <code>src/config/links.ts</code> 就行，不用动代码。
-      </p>
+      <p className="link-hint">{t("bv.friendHint")}</p>
     </div>
   );
 }

@@ -45,6 +45,16 @@ export interface FileNode {
   /** 显示名。文件夹是分类名，文章是标题 */
   name: string;
 
+  /**
+   * 显示名对应的词典 key（可选）。
+   *
+   * ⚠️ 只有「未分类」这种【界面文案】才用得上它 ——
+   *    文件夹名绝大多数来自文章的分类字段，那是内容，不该翻译。
+   *    所以这里是可选的，渲染端按 nameKey 优先取。
+   *    （和 config/tiles.ts 的 labelKey / label 是同一套思路。）
+   */
+  nameKey?: string;
+
   kind: "folder" | "post" | "draft";
 
   /** 子节点，仅 kind === "folder" 有 */
@@ -108,16 +118,25 @@ export interface Crumb {
  *  这样写出来的树永远不会出现空名字的文件夹（那种在界面上
  *  表现为一个点不动的空白行，很难查）。
  */
+/**
+ * 「未分类」这个文件夹名的兜底值。
+ *
+ * ⚠️ 它和别的文件夹名不一样：别的来自文章的分类字段（内容），
+ *    只有它是【界面文案】，所以额外配一个词典 key。
+ */
+export const UNCATEGORIZED = "未分类";
+export const UNCATEGORIZED_KEY = "ex.uncategorized";
+
 export function splitCategory(category: string | undefined | null): string[] {
   const raw = (category ?? "").trim();
-  if (!raw) return ["未分类"];
+  if (!raw) return [UNCATEGORIZED];
 
   const parts = raw
     .split("/")
     .map((s) => s.trim())
     .filter(Boolean);
 
-  return parts.length ? parts : ["未分类"];
+  return parts.length ? parts : [UNCATEGORIZED];
 }
 
 /* ────────────────────────────────────────────────────────────
@@ -126,6 +145,8 @@ export function splitCategory(category: string | undefined | null): string[] {
 
 interface TreeNode {
   name: string;
+  /** 见 FileNode.nameKey 的说明 —— 只有「未分类」会带上它 */
+  nameKey?: string;
   /** 完整路径，如 "/技术/Hexo" */
   path: string;
   children: Map<string, TreeNode>;
@@ -134,7 +155,14 @@ interface TreeNode {
 }
 
 function newTreeNode(name: string, path: string): TreeNode {
-  return { name, path, children: new Map(), files: [] };
+  return {
+    name,
+    // 只有兜底的那个「未分类」需要翻译，其余分类名是文章内容
+    nameKey: name === UNCATEGORIZED ? UNCATEGORIZED_KEY : undefined,
+    path,
+    children: new Map(),
+    files: [],
+  };
 }
 
 /**
@@ -211,6 +239,7 @@ export function buildTree(
       .map((child) => ({
         id: child.path,
         name: child.name,
+        nameKey: child.nameKey,
         kind: "folder" as const,
         children: toArray(child),
       }));
@@ -319,9 +348,17 @@ export function childrenAt(nodes: FileNode[], path: string): FileNode[] {
   return target.children ?? [];
 }
 
-/** 由路径生成面包屑。"/技术/Hexo" → [此电脑, 技术, Hexo] */
-export function crumbsOf(path: string): Crumb[] {
-  const out: Crumb[] = [{ label: "此电脑", path: "/" }];
+/**
+ * 由路径生成面包屑。"/技术/Hexo" → [此电脑, 技术, Hexo]
+ *
+ * ⚠️⚠️ rootLabel 是必传参数 —— 这里顺手修掉了一个老 bug：
+ *    以前根这一项写死成「此电脑」，于是【回收站】窗口的地址栏
+ *    最左边也显示「此电脑」，明明是从回收站点进来的。
+ *    现在由外壳把自己的 rootLabel 传进来（已经是翻译过的），
+ *    既修了 bug，也让面包屑跟着界面语言走。
+ */
+export function crumbsOf(path: string, rootLabel: string): Crumb[] {
+  const out: Crumb[] = [{ label: rootLabel, path: "/" }];
   if (path === "/") return out;
 
   const segs = path.split("/").filter(Boolean);

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
-import { formatDate } from "../../../../lib/markdown";
 import { countPosts, type FileNode, type SortDir, type SortKey } from "./types";
+import { useT, fmtDate } from "../../../../i18n";
+import type { Dict } from "../../../../i18n/types";
 
 /**
  * 详细列表（右侧）。
@@ -36,7 +37,18 @@ export default function FileList({
   sortDir,
   onToggleSort,
 }: FileListProps) {
+  const { t, lang, regional } = useT();
   const bodyRef = useRef<HTMLTableSectionElement>(null);
+
+  /**
+   * 节点的显示名。
+   *
+   * ⚠️ 分两种情况，别一律 t() —— 见 explorer/types.ts 里 nameKey 的说明：
+   *    文件夹名和文章标题来自内容（不翻译），
+   *    只有兜底的「未分类」带 nameKey，才需要翻译。
+   */
+  const nodeLabel = (node: FileNode) =>
+    node.nameKey ? t(node.nameKey as keyof Dict) : node.name;
 
   /**
    * 选中项滚进视野。
@@ -63,7 +75,7 @@ export default function FileList({
   if (nodes.length === 0) {
     return (
       <div className="grid h-full place-items-center text-[12px] text-[var(--fg-faint)]">
-        这个文件夹是空的
+        {t("ex.emptyFolder")}
       </div>
     );
   }
@@ -78,7 +90,7 @@ export default function FileList({
             dir={sortDir}
             className="min-w-[180px]"
           >
-            名称
+            {t("ex.name")}
           </Th>
           <Th
             onClick={() => onToggleSort("kind")}
@@ -86,7 +98,7 @@ export default function FileList({
             dir={sortDir}
             className="hidden w-[110px] sm:table-cell"
           >
-            类型
+            {t("ex.type")}
           </Th>
           <Th
             onClick={() => onToggleSort("date")}
@@ -94,7 +106,7 @@ export default function FileList({
             dir={sortDir}
             className="w-[104px]"
           >
-            修改日期
+            {t("ex.dateModified")}
           </Th>
         </tr>
       </thead>
@@ -110,7 +122,7 @@ export default function FileList({
               data-node-id={node.id}
               tabIndex={0}
               role="button"
-              aria-label={`${isFolder ? "文件夹" : "文章"} ${node.name}`}
+              aria-label={`${isFolder ? t("ex.folder") : t("ex.postKind")} ${nodeLabel(node)}`}
               aria-selected={isSel}
               onClick={() => onSelect(node)}
               onDoubleClick={() => onOpen(node)}
@@ -139,7 +151,7 @@ export default function FileList({
               <td className="px-2 py-1.5">
                 <div className="flex items-center gap-2">
                   <NodeIcon node={node} />
-                  <span className="truncate text-[var(--fg)]">{node.name}</span>
+                  <span className="truncate text-[var(--fg)]">{nodeLabel(node)}</span>
                   {isFolder && (
                     <span className="shrink-0 text-[10px] text-[var(--fg-faint)]">
                       ({countPosts(node)})
@@ -150,12 +162,12 @@ export default function FileList({
 
               <td className="hidden px-2 py-1.5 sm:table-cell">
                 <span className="rounded-sm bg-[var(--surface-3)] px-1.5 py-0.5 text-[10px] text-[var(--fg-dim)]">
-                  {isFolder ? "文件夹" : (node.post?.category ?? "未分类")}
+                  {isFolder ? t("ex.folder") : (node.post?.category ?? t("ex.uncategorized"))}
                 </span>
               </td>
 
               <td className="px-2 py-1.5 tabular-nums text-[var(--fg-dim)]">
-                {node.post ? formatDate(node.post.pubDate) : "—"}
+                {node.post ? fmtDate(node.post.pubDate, lang, regional) : "—"}
               </td>
             </tr>
           );
@@ -177,6 +189,8 @@ export default function FileList({
  *    emoji 在这两种尺寸下渲染得足够清楚。
  */
 function NodeIcon({ node }: { node: FileNode }) {
+  const { t } = useT();
+
   if (node.kind === "folder") {
     return (
       <span className="w-3.5 shrink-0 text-center text-[12px] leading-none" aria-hidden="true">
@@ -189,7 +203,7 @@ function NodeIcon({ node }: { node: FileNode }) {
     <span
       className="w-3.5 shrink-0 text-center text-[12px] leading-none"
       aria-hidden="true"
-      title={node.kind === "draft" ? "草稿" : "文章"}
+      title={node.kind === "draft" ? t("ex.draftKind") : t("ex.postKind")}
     >
       {node.kind === "draft" ? "🗑️" : "📄"}
     </span>
@@ -219,12 +233,14 @@ function Th({
   dir: SortDir;
   className?: string;
 }) {
+  const { t } = useT();
+
   return (
     <th className={`border-b border-[var(--surface-border)] p-0 font-normal ${className}`}>
       <button
         type="button"
         onClick={onClick}
-        title={`按「${String(children)}」排序，再点一次反转方向`}
+        title={t("ex.sortTip", { name: String(children) })}
         className={`flex w-full items-center gap-1 px-2 py-1.5 text-left transition-colors
                     hover:bg-[var(--hover)] ${active ? "font-medium text-[var(--fg)]" : ""}`}
       >

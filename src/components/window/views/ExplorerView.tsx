@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import type { ClientPost } from "../../../lib/markdown";
 import FileManagerShell from "./explorer/FileManagerShell";
 import { buildTree, type FileNode } from "./explorer/types";
+import { useT } from "../../../i18n";
 
 /**
  * 「此电脑」—— 仿 Win10 文件资源管理器。
@@ -38,6 +39,8 @@ export interface ExplorerViewProps {
 }
 
 export default function ExplorerView({ posts }: ExplorerViewProps) {
+  const { t } = useT();
+
   /**
    * 构建分类文件夹树。
    *
@@ -103,13 +106,9 @@ export default function ExplorerView({ posts }: ExplorerViewProps) {
       tree={tree}
       flatList={flat}
       rootIcon="/icons/pc.png"
-      rootLabel="此电脑"
+      rootLabel={t("app.thisPC")}
       onOpen={openPost}
-      emptyText={
-        posts.length === 0
-          ? "还没有文章。在 src/content/blog/ 下新建一个 .md 就会出现在这里。"
-          : "这个文件夹是空的"
-      }
+      emptyText={posts.length === 0 ? t("ex.noPosts") : t("ex.emptyFolder")}
     />
   );
 }

@@ -46,8 +46,31 @@ export interface TileConfig {
   /** 唯一标识。同一 id 出现两次，后者会被忽略（控制台会警告） */
   id: string;
 
-  /** 磁贴下方显示的文字，建议 6 个字以内，超出会换行 */
-  label: string;
+  /**
+   * 磁贴文字在词典里的 key。用于【内置磁贴】——
+   * 也就是手写在下面 TILE_GROUPS 里的这些。建议语义清晰，如 "app.notepad"。
+   *
+   * ⚠️ 与 label 二选一，理由见下。
+   */
+  labelKey?: string;
+
+  /**
+   * 磁贴文字的字面量。【自动生成】的磁贴用这个 ——
+   * 也就是 lib/tiles.ts 里把文章的分类 / 标签追加成磁贴的那部分。
+   *
+   * ⚠️⚠️ 为什么它们不能也用 labelKey？
+   *
+   *    因为分类名（"前端"）和标签名（"Astro"）来自【文章内容】，
+   *    不是界面文案 —— 切语言时它们本来就不该变。
+   *    硬把它们当 key 去查词典，查不到，磁贴上会显示一片空白。
+   *
+   *    所以这两个字段的存在本身就是一条边界：
+   *      labelKey → 界面文案，跟着语言变
+   *      label    → 内容，永远是原文
+   *
+   *    渲染端（Tile.tsx）按 labelKey 优先取。
+   */
+  label?: string;
 
   /**
    * 图标。三种写法都支持：
@@ -140,8 +163,8 @@ export const PALETTE = [
  *    大磁贴会挤到下一行，而不会"借"用隔壁组的空位。
  */
 export interface TileGroup {
-  /** 分组标题，显示在磁贴区上方 */
-  title: string;
+  /** 分组标题在词典里的 key（如 "tile.group.create"） */
+  titleKey: string;
 
   /**
    * 这一组有几列。
@@ -162,12 +185,12 @@ export interface TileGroup {
 export const TILE_GROUPS: TileGroup[] = [
   {
     // 「创建」区：放和写作、内容相关的入口
-    title: "Create",
+    titleKey: "tile.group.create",
     columns: 4,
     tiles: [
       {
         id: "all-posts",
-        label: "最新文章",
+        labelKey: "app.posts",
         icon: "📚",
         path: "/posts",
         size: "lg", // 大磁贴，视觉重心
@@ -175,7 +198,7 @@ export const TILE_GROUPS: TileGroup[] = [
       },
       {
         id: "calendar-live",
-        label: "归档",
+        labelKey: "app.archive",
         icon: "📅",
         path: "/archive",
         size: "lg",
@@ -186,7 +209,7 @@ export const TILE_GROUPS: TileGroup[] = [
       },
       {
         id: "notepad",
-        label: "记事本",
+        labelKey: "app.notepad",
         icon: "/icons/notepad.png",
         path: "/posts",
         size: "wide", // 2×1 宽磁贴
@@ -194,7 +217,7 @@ export const TILE_GROUPS: TileGroup[] = [
       },
       {
         id: "tags",
-        label: "标签",
+        labelKey: "app.tags",
         icon: "#️⃣",
         path: "/tags",
         size: "sm",
@@ -204,12 +227,12 @@ export const TILE_GROUPS: TileGroup[] = [
   },
   {
     // 「玩」区：外部链接
-    title: "Play",
+    titleKey: "tile.group.play",
     columns: 4,
     tiles: [
       {
         id: "github",
-        label: "GitHub",
+        labelKey: "app.github",
         icon: "🐙",
         // 换成你自己的地址
         path: "https://github.com",
@@ -218,7 +241,7 @@ export const TILE_GROUPS: TileGroup[] = [
       },
       {
         id: "bilibili",
-        label: "B站",
+        labelKey: "app.bilibili",
         icon: "📺",
         path: "https://www.bilibili.com",
         size: "sm",
@@ -226,7 +249,7 @@ export const TILE_GROUPS: TileGroup[] = [
       },
       {
         id: "photos",
-        label: "相册",
+        labelKey: "app.photos",
         icon: "🖼️",
         path: "/about",
         size: "wide",
@@ -236,12 +259,12 @@ export const TILE_GROUPS: TileGroup[] = [
   },
   {
     // 「探索」区：站内导航
-    title: "Explore",
+    titleKey: "tile.group.explore",
     columns: 4,
     tiles: [
       {
         id: "about",
-        label: "关于我",
+        labelKey: "app.aboutMe",
         icon: "👤",
         path: "/about",
         size: "sm",
@@ -249,7 +272,7 @@ export const TILE_GROUPS: TileGroup[] = [
       },
       {
         id: "search",
-        label: "搜索",
+        labelKey: "app.search",
         icon: "🔍",
         path: "/search",
         size: "sm",
@@ -257,7 +280,7 @@ export const TILE_GROUPS: TileGroup[] = [
       },
       {
         id: "settings",
-        label: "控制面板",
+        labelKey: "app.controlPanel",
         icon: "/icons/control.png",
         path: "/settings",
         size: "wide",

@@ -5,6 +5,8 @@ import { useClock } from "../../hooks/useClock";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import StartMenu, { type StartMenuProps } from "./StartMenu";
 import { isImageIcon } from "../../lib/tiles";
+import { useT } from "../../i18n";
+import { WEEKDAY_KEYS } from "../../i18n/types";
 
 /**
  * 任务栏上的窗口图标：emoji 或图片路径二选一。
@@ -48,6 +50,7 @@ function ShowDesktopIcon() {
  * 这就是 props 钻透（prop drilling）—— 两层还能接受，再多就该上 Context 了。
  */
 export default function Taskbar({ categories, tags }: StartMenuProps) {
+  const { t } = useT();
   const windows = useWindowStore((s) => s.windows);
   const topZ = useWindowStore((s) => s.topZ);
   const startMenuOpen = useWindowStore((s) => s.startMenuOpen);
@@ -85,14 +88,20 @@ export default function Taskbar({ categories, tags }: StartMenuProps) {
   useEffect(() => {
     if (!startMenuOpen) return;
     const onDown = (e: MouseEvent) => {
-      const t = e.target as HTMLElement | null;
-      if (!t) return;
+      /**
+       * ⚠️ 这里叫 el 而不是 t ——
+       *    因为组件作用域里已经有一个 t（翻译函数）。
+       *    叫 t 的话这个局部变量会把翻译函数遮蔽掉，
+       *    在那个 useEffect 里就再也调不到 t("...")。
+       */
+      const el = e.target as HTMLElement | null;
+      if (!el) return;
 
       // 点在任务栏内部（含开始按钮）
-      if (barRef.current?.contains(t)) return;
+      if (barRef.current?.contains(el)) return;
 
       // 点在开始菜单内部（含磁贴、磁贴里的图标/文字）
-      if (t.closest("[data-startmenu]")) return;
+      if (el.closest("[data-startmenu]")) return;
 
       setStartMenu(false);
     };
@@ -159,7 +168,7 @@ export default function Taskbar({ categories, tags }: StartMenuProps) {
       >
         {/* ── 左：开始按钮 ── */}
         <button
-          aria-label="开始"
+          aria-label={t("taskbar.start")}
           aria-expanded={startMenuOpen}
           onClick={toggleStartMenu}
           className={`grid h-full w-12 shrink-0 place-items-center transition-colors
@@ -205,7 +214,7 @@ export default function Taskbar({ categories, tags }: StartMenuProps) {
           <div
             className="flex h-full cursor-default flex-col items-center justify-center
                        px-3 text-[11px] leading-tight hover:bg-[var(--hover-invert)]"
-            title={`${clock.date} ${clock.weekday}`}
+            title={`${clock.date} ${t(WEEKDAY_KEYS[clock.weekdayIndex])}`}
           >
             <span className="tabular-nums">{clock.time}</span>
             {!isMobile && <span className="opacity-80">{clock.date}</span>}
@@ -213,8 +222,8 @@ export default function Taskbar({ categories, tags }: StartMenuProps) {
 
           {/* 回到桌面 */}
           <button
-            aria-label="回到桌面"
-            title="回到桌面"
+            aria-label={t("taskbar.showDesktop")}
+            title={t("taskbar.showDesktop")}
             onClick={minimizeAll}
             className="grid h-full w-10 place-items-center border-l border-[var(--acrylic-border)]
                        transition-colors hover:bg-[var(--hover-invert)]"
