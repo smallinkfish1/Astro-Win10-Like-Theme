@@ -9,7 +9,7 @@
 
 -->
 
-# Win10 Blog
+# Astro Win10 Blog (WIP)
 
 > 一个把博客做成 **Windows 10 桌面**的 Astro 项目。
 > 文章是文件，分类是磁贴，归档是「此电脑」，草稿丢进「回收站」。
