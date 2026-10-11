@@ -11,6 +11,7 @@ import {
 } from "../../config/startMenu";
 import TileGrid from "./TileGrid";
 import { useT } from "../../i18n";
+import { findApp } from "../../config/apps";
 import type { Dict } from "../../i18n/types";
 
 /**
@@ -167,7 +168,15 @@ export default function StartMenu({ categories, tags }: StartMenuProps) {
 
     open({ id: item.id, title: t(item.nameKey as keyof Dict), icon: item.icon, path: item.url });
 
-    if (window.location.pathname !== item.url) {
+    /**
+     * ⚠️ 未实现的应用【不同步地址栏】。
+     *
+     *    它的 path（比如 /search）还没有对应的静态页 ——
+     *    replaceState 过去之后，用户一刷新就是 404。
+     *    地址栏停在原地反而是诚实的：这个窗口本来就没有地址。
+     */
+    const app = findApp(item.id);
+    if (app?.ready !== false && window.location.pathname !== item.url) {
       window.history.replaceState({ path: item.url }, "", item.url);
     }
     setStartMenu(false);
@@ -201,7 +210,9 @@ export default function StartMenu({ categories, tags }: StartMenuProps) {
       ...(tile.pos.colSpan * tile.pos.rowSpan >= 2 ? { w: 860, h: 560 } : {}),
     });
 
-    if (window.location.pathname !== tile.path) {
+    // ⚠️ 同上：未实现的应用不同步地址栏（它的 path 还没有对应页面）
+    const tileApp = findApp(tile.id);
+    if (tileApp?.ready !== false && window.location.pathname !== tile.path) {
       window.history.replaceState({ path: tile.path }, "", tile.path);
     }
     setStartMenu(false);

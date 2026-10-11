@@ -12,7 +12,8 @@
     "astro": "astro",
     "verify": "node .verify/verify-all.mjs",
     "verify:build": "astro build && node .verify/verify-all.mjs",
-    "verify:i18n": "node .verify/i18n-coverage.mjs"
+    "verify:i18n": "node .verify/i18n-coverage.mjs",
+    "verify:apps": "node .verify/apps-coverage.mjs"
   },
   "dependencies": {
     "@astrojs/markdown-remark": "^7.3.1",

@@ -83,6 +83,7 @@ export interface Dict {
   "win.notFoundPost": string;
   "win.notFoundDraft": string;
   "win.unknownType": string;
+  "win.comingSoon": string;
   "win.readonlySuffix": string;
   "win.tagTitle": string;
   "win.categoryTitle": string;

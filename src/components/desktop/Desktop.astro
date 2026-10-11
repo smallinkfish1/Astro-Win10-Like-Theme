@@ -1,5 +1,6 @@
 ---
 import DesktopIcon from "./DesktopIcon.astro";
+import { DESKTOP_APP_IDS, appsOf } from "../../config/apps";
 import { zhCN } from "../../i18n/zh-CN";
 import { en } from "../../i18n/en";
 import type { Dict } from "../../i18n/types";
@@ -21,19 +22,20 @@ import type { Dict } from "../../i18n/types";
  *   回收站   → 草稿箱（DraftsView）
  *   控制面板 → 外观设置，暗色模式/毛玻璃/动画三个开关（ControlPanelView）
  */
-const icons = [
-  { id: "pc", labelKey: "app.thisPC", icon: "/icons/pc.png", path: "/archive" },
-  { id: "notepad", labelKey: "app.notepad", icon: "/icons/notepad.png", path: "/posts" },
-  { id: "browser", labelKey: "app.browser", icon: "/icons/browser.png", path: "/about" },
-  { id: "recycle", labelKey: "app.recycleBin", icon: "/icons/recycle.png", path: "/drafts" },
-  { id: "control", labelKey: "app.controlPanel", icon: "/icons/control.png", path: "/settings" },
-].map((i) => ({
-  id: i.id,
-  icon: i.icon,
-  path: i.path,
+/**
+ * 五个桌面图标 —— 从【应用注册表】取，不在这里手写。
+ *
+ * ⚠️ 以前这里是手抄的一份清单，和 WindowManager 的 ICON_ROUTES
+ *    是两份独立数据，改一边忘另一边就会出现"双击图标没反应"。
+ *    现在唯一的真相在 config/apps.ts。
+ */
+const icons = appsOf(DESKTOP_APP_IDS).map((a) => ({
+  id: a.id,
+  icon: a.icon,
+  path: a.path,
   // 两份文案都从词典里取，不手抄 —— 免得和窗口内的叫法对不上
-  zh: zhCN[i.labelKey as keyof Dict],
-  en: en[i.labelKey as keyof Dict],
+  zh: zhCN[a.nameKey as keyof Dict],
+  en: en[a.nameKey as keyof Dict],
 }));
 ---
 

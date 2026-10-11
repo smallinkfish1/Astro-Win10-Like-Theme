@@ -33,7 +33,15 @@
  * ⚠️⚠️ 由此带来一个连锁影响：下面 buildAlphaGroups() 是按"显示名"
  *    的首字母分组的，不能再读 nameKey（那会全是 "A"）。
  *    它现在接收一个 getName 回调，由调用方传入当前语言的取名函数。
+ *
+ * ⚠️⚠️ 另一个连锁影响（这次才修）：这里的 id 必须和【窗口层认的 id】
+ *    完全一致，否则点开就是"未知窗口类型"。
+ *    以前这里写的是 app-* / recent-* 前缀，而窗口层认的是 pc / notepad / …
+ *    两边对不上 —— 于是开始菜单里几乎每一项都点不开。
+ *    现在统一从 config/apps.ts 取，不再手写。
  */
+
+import { RECENT_APP_IDS, START_MENU_APP_IDS, appsOf, type AppDef } from "./apps";
 
 /** 左侧列表里的一个条目 */
 export interface MenuItem {
@@ -62,34 +70,26 @@ export interface MenuItem {
 }
 
 /**
+ * 把注册表条目转成菜单项。
+ *
+ * ⚠️ 只换字段名（注册表叫 path，菜单项叫 url），**不动 id** ——
+ *    id 是它和窗口层之间的唯一约定，必须原样传过去。
+ */
+function toMenuItem(a: AppDef): MenuItem {
+  return { id: a.id, nameKey: a.nameKey, icon: a.icon, url: a.path };
+}
+
+/**
  * 「最近添加」区。
  *
  * 一般放 2-3 个 —— 放太多就和下面的字母索引重复了，
  * 而且 Win10 原版这里就是很短的一小段。
  *
- * ⚠️ 现在写的是静态数据。想做成"真的最近"的话，
- *    在 StartMenu.tsx 里读 localStorage 里记录的最近点击记录替换掉即可。
+ * ⚠️ 这【不是】真的最近使用记录，就是 RECENT_APP_IDS 那三个固定项。
+ *    想做成真的：在 windowStore.open() 里把每次打开的 id 记进
+ *    localStorage，再改成从那里读 —— 组件一行都不用动。
  */
-export const RECENTLY_ADDED: MenuItem[] = [
-  {
-    id: "recent-notepad",
-    nameKey: "app.notepad",
-    icon: "/icons/notepad.png",
-    url: "/posts",
-  },
-  {
-    id: "recent-explorer",
-    nameKey: "app.thisPC",
-    icon: "/icons/pc.png",
-    url: "/archive",
-  },
-  {
-    id: "recent-settings",
-    nameKey: "app.controlPanel",
-    icon: "/icons/control.png",
-    url: "/settings",
-  },
-];
+export const RECENTLY_ADDED: MenuItem[] = appsOf(RECENT_APP_IDS).map(toMenuItem);
 
 /**
  * 「所有应用」列表 —— 按首字母分区显示。
@@ -100,19 +100,7 @@ export const RECENTLY_ADDED: MenuItem[] = [
  *
  *    手动排的坏处是：加一个条目就要重排一次，而且很容易漏掉。
  */
-export const ALL_APPS: MenuItem[] = [
-  { id: "app-archive", nameKey: "app.archive", icon: "📅", url: "/archive" },
-  { id: "app-about", nameKey: "app.aboutMe", icon: "👤", url: "/about" },
-  { id: "app-bilibili", nameKey: "app.bilibili", icon: "📺", url: "https://www.bilibili.com" },
-  { id: "app-browser", nameKey: "app.browser", icon: "/icons/browser.png", url: "/about" },
-  { id: "app-control", nameKey: "app.controlPanel", icon: "/icons/control.png", url: "/settings" },
-  { id: "app-github", nameKey: "app.github", icon: "🐙", url: "https://github.com" },
-  { id: "app-notepad", nameKey: "app.notepad", icon: "/icons/notepad.png", url: "/posts" },
-  { id: "app-posts", nameKey: "app.posts", icon: "📚", url: "/posts" },
-  { id: "app-recycle", nameKey: "app.recycleBin", icon: "/icons/recycle.png", url: "/drafts" },
-  { id: "app-search", nameKey: "app.search", icon: "🔍", url: "/search" },
-  { id: "app-tags", nameKey: "app.tags", icon: "#️⃣", url: "/tags" },
-];
+export const ALL_APPS: MenuItem[] = appsOf(START_MENU_APP_IDS).map(toMenuItem);
 
 /** 首字母分区：{ letter: "A", items: [...] } */
 export interface AlphaGroup {

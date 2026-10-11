@@ -8,6 +8,8 @@
  * 改完需要【重启 dev server】吗？不需要，保存后热更新就会生效。
  */
 
+import { findApp } from "./apps";
+
 /**
  * 磁贴尺寸。
  *
@@ -178,6 +180,58 @@ export interface TileGroup {
 }
 
 /**
+ * 磁贴的「排布声明」—— 只写磁贴独有的东西（多大、什么颜色、是不是实时的）。
+ *
+ * ⚠️ 名字、图标、路径【不在这里写】，它们从应用注册表取，见下面的 tile()。
+ */
+type TileSpec = {
+  /** 应用 id（必须在 config/apps.ts 里登记过） */
+  id: string;
+  size?: TileSize;
+  color?: string;
+  kind?: TileKind;
+  live?: "date" | "clock" | "weather";
+};
+
+/**
+ * 把一个排布声明补成完整的磁贴配置。
+ *
+ * ⚠️⚠️ 文案 / 图标 / 路径一律从【应用注册表】取，绝不在这里手写。
+ *
+ *    以前这里三项都手抄了一遍，于是必然漂移 ——
+ *    比如磁贴「相册」写着 path: "/about"（点开是关于页），
+ *    而「最新文章」的 id 叫 all-posts、窗口层根本不认识，
+ *    点下去显示"未知窗口类型"。
+ *
+ *    现在这个文件只负责"怎么摆"，"是什么"全在 config/apps.ts。
+ */
+function tile({ id, ...layout }: TileSpec): TileConfig {
+  const app = findApp(id);
+
+  /**
+   * ⚠️ 找不到就【立刻抛错】，不要静默产出一个空磁贴。
+   *
+   *    抛在构建期，错误信息里直接写着怎么办 ——
+   *    比在浏览器里看到一个点不动的方块好查一百倍。
+   *    （.verify/apps-coverage.mjs 也会提前把这种 id 抓出来。）
+   */
+  if (!app) {
+    throw new Error(
+      `[tiles] 磁贴 "${id}" 不在应用注册表里。` +
+        `请先在 src/config/apps.ts 登记它，或改用一个已有的 id。`,
+    );
+  }
+
+  return {
+    id: app.id,
+    labelKey: app.nameKey,
+    icon: app.icon,
+    path: app.path,
+    ...layout,
+  };
+}
+
+/**
  * 磁贴分组 —— 你主要改的就是这里。
  *
  * 顺序 = 显示顺序。组内磁贴的排列顺序也是书写顺序。
@@ -188,41 +242,13 @@ export const TILE_GROUPS: TileGroup[] = [
     titleKey: "tile.group.create",
     columns: 4,
     tiles: [
-      {
-        id: "all-posts",
-        labelKey: "app.posts",
-        icon: "📚",
-        path: "/posts",
-        size: "lg", // 大磁贴，视觉重心
-        color: "#2b579a",
-      },
-      {
-        id: "calendar-live",
-        labelKey: "app.archive",
-        icon: "📅",
-        path: "/archive",
-        size: "lg",
-        color: "#2b579a",
-        // 实时磁贴：显示今天的日期和星期，见 startMenu.ts 里的说明
-        kind: "live",
-        live: "date",
-      },
-      {
-        id: "notepad",
-        labelKey: "app.notepad",
-        icon: "/icons/notepad.png",
-        path: "/posts",
-        size: "wide", // 2×1 宽磁贴
-        color: "#d35400",
-      },
-      {
-        id: "tags",
-        labelKey: "app.tags",
-        icon: "#️⃣",
-        path: "/tags",
-        size: "sm",
-        color: "#7a3b8f",
-      },
+      // 大磁贴，视觉重心
+      tile({ id: "posts", size: "lg", color: "#2b579a" }),
+      // 实时磁贴：显示今天的日期和星期，见 startMenu.ts 里的说明
+      tile({ id: "archive", size: "lg", color: "#2b579a", kind: "live", live: "date" }),
+      // 2×1 宽磁贴
+      tile({ id: "notepad", size: "wide", color: "#d35400" }),
+      tile({ id: "tags", size: "sm", color: "#7a3b8f" }),
     ],
   },
   {
@@ -230,31 +256,14 @@ export const TILE_GROUPS: TileGroup[] = [
     titleKey: "tile.group.play",
     columns: 4,
     tiles: [
-      {
-        id: "github",
-        labelKey: "app.github",
-        icon: "🐙",
-        // 换成你自己的地址
-        path: "https://github.com",
-        size: "sm",
-        color: "#40485a",
-      },
-      {
-        id: "bilibili",
-        labelKey: "app.bilibili",
-        icon: "📺",
-        path: "https://www.bilibili.com",
-        size: "sm",
-        color: "#c0392b",
-      },
-      {
-        id: "photos",
-        labelKey: "app.photos",
-        icon: "🖼️",
-        path: "/about",
-        size: "wide",
-        color: "#0e7c86",
-      },
+      tile({ id: "github", size: "sm", color: "#40485a" }),
+      tile({ id: "bilibili", size: "sm", color: "#c0392b" }),
+      /*
+        ⚠️ 这里原来还有一个「相册」磁贴，已经删掉。
+           因为它指向的是 /about（关于页）—— 点开是"关于我"，
+           而「探索」区里已经有一个「关于我」了，两个磁贴通向同一页很怪。
+           以后真做了相册页面，在 apps.ts 登记后在这里加回来即可。
+      */
     ],
   },
   {
@@ -262,30 +271,9 @@ export const TILE_GROUPS: TileGroup[] = [
     titleKey: "tile.group.explore",
     columns: 4,
     tiles: [
-      {
-        id: "about",
-        labelKey: "app.aboutMe",
-        icon: "👤",
-        path: "/about",
-        size: "sm",
-        color: "#27754a",
-      },
-      {
-        id: "search",
-        labelKey: "app.search",
-        icon: "🔍",
-        path: "/search",
-        size: "sm",
-        color: "#2b579a",
-      },
-      {
-        id: "settings",
-        labelKey: "app.controlPanel",
-        icon: "/icons/control.png",
-        path: "/settings",
-        size: "wide",
-        color: "#40485a",
-      },
+      tile({ id: "about", size: "sm", color: "#27754a" }),
+      tile({ id: "search", size: "sm", color: "#2b579a" }),
+      tile({ id: "control", size: "wide", color: "#40485a" }),
     ],
   },
 ];

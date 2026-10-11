@@ -11,6 +11,7 @@ import {
   normalizeSection,
   type SettingsSection,
 } from "../../lib/settings-sections";
+import { DESKTOP_APP_IDS, appsOf, findApp } from "../../config/apps";
 import Window from "./Window";
 import ArticleView from "./views/ArticleView";
 import ArchiveView from "./views/ArchiveView";
@@ -24,28 +25,23 @@ import BrowserView from "./views/BrowserView";
 
 /**
  * 与桌面图标一一对应，URL 同步和反向还原都依赖这张表。
- * 注意这里的 path 要和静态路由保持一致（见 src/pages/ 下的对应文件）。
  *
- * ⚠️ 这张表和 Desktop.astro 里的 icons 数组是【两份手写数据】，
- *    改一边必须改另一边。两边 id 不一致的表现是：双击图标派发了事件，
- *    但这里找不到同 id 的项，窗口层不知道开什么 —— 看起来像"点了没反应"。
- *    （verify-desktop.mjs 里有一条断言专门盯着这个。）
- */
-/**
- * ⚠️ 这里存的是 titleKey，不是文案本身。
+ * ⚠️ 它现在是【从应用注册表派生】的，不再是手写数据。
+ *    以前这里和 Desktop.astro 的 icons 数组是两份独立清单，
+ *    两边 id 不一致的表现是：双击图标派发了事件，但这里找不到同 id 的项，
+ *    窗口层不知道开什么 —— 看起来像"点了没反应"。
+ *    现在唯一的真相在 config/apps.ts。
  *
- *    它和 Desktop.astro 里的 icons、config/tiles.ts 一样，是【模块顶层】的
- *    常量 —— 创建时 React 还没挂载、store 还没初始化，
- *    在这里调 t() 会固化一个错误的值，而且之后切语言也不会重算。
- *    所以只放注册名，真正的文字在 open() 的那一刻才翻译。
+ * ⚠️ titleKey 存的是词典 key 而不是文案：这张表在【模块顶层】创建，
+ *    那时 store 还没初始化，直接调 t() 会固化错误的值。
+ *    真正的文字在 open() 的那一刻才翻译。
  */
-export const ICON_ROUTES = [
-  { id: "pc", titleKey: "app.thisPC", icon: "/icons/pc.png", path: "/archive" },
-  { id: "notepad", titleKey: "app.notepad", icon: "/icons/notepad.png", path: "/posts" },
-  { id: "browser", titleKey: "app.browser", icon: "/icons/browser.png", path: "/about" },
-  { id: "recycle", titleKey: "app.recycleBin", icon: "/icons/recycle.png", path: "/drafts" },
-  { id: "control", titleKey: "app.controlPanel", icon: "/icons/control.png", path: "/settings" },
-];
+export const ICON_ROUTES = appsOf(DESKTOP_APP_IDS).map((a) => ({
+  id: a.id,
+  titleKey: a.nameKey,
+  icon: a.icon,
+  path: a.path,
+}));
 
 /**
  * 「控制面板 - 外观」这种窗口标题。
@@ -60,6 +56,30 @@ export const ICON_ROUTES = [
  */
 function controlTitle(s: SettingsSection): string {
   return tNow("win.controlPanelTitle", { name: tNow(s.nameKey as keyof Dict) });
+}
+
+/**
+ * 「功能开发中」占位页。
+ *
+ * ⚠️ 它和「未知窗口类型」是两回事，别合并：
+ *    这里的应用【在计划内】，只是还没做 —— 属于预期内的状态，
+ *    所以文案要友善，而且不暴露任何内部标识（id、路径）。
+ *
+ * 样式和控制面板里未实现分类的占位页保持一致，
+ * 让"还没做"这件事在全站看起来是同一个东西。
+ */
+function ComingSoon({ name }: { name: string }) {
+  const { t } = useT();
+
+  return (
+    <div className="grid h-full min-h-[220px] place-items-center">
+      <div className="text-center">
+        <div className="text-[32px] leading-none opacity-40">🚧</div>
+        <div className="mt-4 text-[14px] text-[var(--fg)]">{name}</div>
+        <div className="mt-2 text-[12.5px] text-[var(--fg-dim)]">{t("win.comingSoon")}</div>
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -194,6 +214,14 @@ export default function WindowManager({
         // 兼容旧路径 /posts：直接进文章列表视图
         case "posts":
           return <ArchiveView posts={posts} />;
+        /*
+          「归档」——从开始菜单/磁贴点进来。
+          ⚠️ 和上面 case "pc" 是【同一个视图】（此电脑本来就是按年份浏览的），
+             只是窗口标题不同。以前这里没有这个 case，所以点「归档」
+             会掉进兜底、显示"未知窗口类型"。
+        */
+        case "archive":
+          return <ArchiveView posts={posts} />;
         default:
           break;
       }
@@ -319,11 +347,27 @@ export default function WindowManager({
         );
       }
 
-      // 理论上不该走到这里（上面所有分支都覆盖了），
-      // 留个兜底提示比返回 undefined 好 —— 至少能看出是 id 拼错了
+      /**
+       * ── 兜底 ──
+       *
+       * ⚠️⚠️ 分两种情况，别再混在一起（以前只有一种，而且把内部 id 漏给了用户）：
+       *
+       *   1. 应用【在注册表里】、只是还没做 → 显示「功能开发中…」
+       *      这是预期内的状态（比如「搜索」），不该长得像出了错。
+       *
+       *   2. 真的不认识 → 友好提示；内部 id 只写进 console.warn。
+       *      给用户看 "recent-explorer" 这种字符串没有任何帮助，
+       *      只会让人以为站坏了。
+       */
+      const app = findApp(id);
+      if (app && app.ready === false) {
+        return <ComingSoon name={tNow(app.nameKey as keyof Dict)} />;
+      }
+
+      console.warn(`[windows] 未知窗口类型：${id}`);
       return (
         <div className="grid h-full place-items-center text-[12px] text-[var(--fg-faint)]">
-           {tNow("win.unknownType", { id })}
+          {tNow("win.unknownType")}
         </div>
       );
     },
@@ -356,7 +400,16 @@ export default function WindowManager({
       const title = route ? tNow(route.titleKey as keyof Dict) : detail.title;
 
       open({ ...detail, title });
-      syncUrl(detail.path);
+
+      /**
+       * ⚠️ 未实现的应用【不同步地址栏】。
+       *
+       *    因为它的 path（比如 /search）还没有对应的静态页 ——
+       *    replaceState 过去之后，用户一刷新就是 404。
+       *    地址栏停在原地反而是诚实的：这个窗口本来就没有地址。
+       */
+      const app = findApp(detail.id);
+      if (app?.ready !== false) syncUrl(detail.path);
     };
     window.addEventListener("os:open-window", handler);
     return () => window.removeEventListener("os:open-window", handler);
