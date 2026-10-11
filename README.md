@@ -41,7 +41,7 @@
 | 项目 | 值 |
 | --- | --- |
 | 项目名 | `win10-blog` |
-| 版本 | `0.0.1` |
+| 版本 | `0.1` |
 | 当前阶段 | **第七阶段已完成**（记事本 + 控制面板） |
 | Node 要求 | `>=22.12.0` |
 | 是否已发布到 npm | 否 |
@@ -313,8 +313,7 @@ export const SOCIALS: SocialLink[] = [
 
 | 项目 | 内容 |
 | --- | --- |
-| AI 工具 / 模型名称 | <!-- TODO: 请补全实际使用的工具与模型名称。如果你有多个（例如不同阶段用了不同模型），请全部列出。 --> |
-| AI 工具版本 | <!-- TODO: 如果知道具体版本号请填写；不确定可以写"未记录"。 --> |
+| AI 模型 | DeepSeek V4.1-flash |
 | 主要用途 | 代码实现、代码重构、bug 定位与修复、自动化验收脚本编写、文档撰写 |
 | 人工参与的部分 | 需求定义、功能验收、bug 复现路径确认、最终代码取舍、发布决策 |
 
@@ -409,16 +408,10 @@ win10-blog-stage5/
 │   │   └── search-index.json.ts  # 搜索索引（UI 未接入）
 │   ├── store/windowStore.ts   # ⭐ 窗口状态（含 uid 机制）
 │   └── styles/global.css      # ⭐ 样式变量 + 共用类
-├── public/
-│   ├── icons/social/      # 9 个社交平台 SVG
-│   └── wallpapers/        # 壁纸（需自行放入图片）
-├── verify-all.mjs         # 一键跑五套验收
-├── verify.mjs             # 基础桌面/窗口/路由
-├── verify-theme.mjs       # 毛玻璃/动画/暗色模式
-├── verify-tiles.mjs       # 开始菜单/磁贴
-├── verify-desktop.mjs     # 壁纸/图标/三个新窗口
-├── verify-apps.mjs        # 记事本/控制面板
-└── verify-control-fix.mjs # 控制面板僵尸窗口专用回归
+└── public/
+     ├── icons/social/      # 9 个社交平台 SVG
+     └── wallpapers/        # 壁纸（需自行放入图片）
+
 ```
 
 ### 三个关键设计决策
@@ -454,7 +447,7 @@ win10-blog-stage5/
 
 ---
 
-## 测试与验证
+## 测试与验证 （Dev 分支）
 
 ### 怎么跑
 
@@ -639,7 +632,7 @@ npm run build     # 期望输出：构建成功
 
 # English Version
 
-**Win10 Blog** — an Astro theme that turns a blog into a **Windows 10 desktop**.
+**Astro Win10 Blog** — an Astro theme that turns a blog into a **Windows 10 desktop**.
 
 Instead of a conventional post list, visitors land on a **clickable desktop**. Posts are files, categories are tiles, tags are windows, the archive is "This PC", and drafts go to the "Recycle Bin". Double-click an icon to open a window; drag it, minimize it, switch it from the taskbar; the Start menu holds real categories and tags.
 
