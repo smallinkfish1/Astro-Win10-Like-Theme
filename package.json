@@ -23,6 +23,7 @@
     "@types/react-dom": "^19.3.0",
     "astro": "^7.3.5",
     "katex": "^0.18.11",
+    "lunar-typescript": "^1.8.6",
     "marked": "^18.0.14",
     "marked-katex-extension": "^5.1.13",
     "motion": "^14.0.0",

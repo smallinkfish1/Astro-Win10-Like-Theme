@@ -1,80 +1,37 @@
 ---
-import DesktopIcon from "./DesktopIcon.astro";
-import { DESKTOP_APP_IDS, appsOf } from "../../config/apps";
-import { zhCN } from "../../i18n/zh-CN";
-import { en } from "../../i18n/en";
-import type { Dict } from "../../i18n/types";
+import DesktopIcons from "./DesktopIcons.tsx";
 
 /**
- * 桌面图标清单 —— 还原 Win10 默认桌面的五个图标。
+ * 桌面图标层。
  *
- * ⚠️ 这里的 id 必须能在 WindowManager 的 ICON_ROUTES 里找到同名的项，
- *    否则双击图标会派发事件、但窗口层不知道该开什么，表现为"没反应"。
+ * ── ⚠️ 这个文件现在几乎是空的，因为它以前干的活搬走了 ──
  *
- * ⚠️ path 是"这个图标对应哪个静态页面"。因为项目要求每篇文章都有独立
- *    静态路由（SEO 需要），所以每次开窗口都会顺手 replaceState 到对应路径，
- *    刷新页面时 WindowManager 再按路径把窗口还原回来。
+ *   以前这里是【构建期】渲染的静态 HTML：一张写死的图标清单 +
+ *   DesktopIcon.astro 循环渲染。中英文靠"两份都写进 HTML、
+ *   用 CSS 的 html[lang] 选择器显示其中一份"来切换。
  *
- * 五个图标的分工：
- *   此电脑   → 仿资源管理器的文章列表（ExplorerView）
- *   记事本   → 纯文本读文章（NotepadView）
- *   浏览器   → 友情链接 + 社交主页（BrowserView）
- *   回收站   → 草稿箱（DraftsView）
- *   控制面板 → 外观设置，暗色模式/毛玻璃/动画三个开关（ControlPanelView）
+ *   但拖动需要状态，静态 HTML 做不到。所以整块换成了 React 组件
+ *   （DesktopIcons.tsx），图标清单也不再手写 —— 唯一的真相在
+ *   config/apps.ts。
+ *
+ *   顺带的好处：双语改成直接用 t()，那套 CSS 切换技巧不再需要。
+ *
+ * ── 为什么不再传 posts ──
+ *
+ *   「创建快捷方式」功能暂时下线了，桌面图标层不需要文章列表。
+ *   少传这一份 props，首屏 JSON 也能小一点（虽然影响很小，
+ *   但没必要留着不用的数据）。
+ *
+ * ── 这里为什么还留一层 div ──
+ *
+ *   ⚠️ Astro 的 client:only 会给组件套一层 <astro-island>，
+ *      而那层标签的尺寸是 0×0、也不是定位上下文。
+ *      DesktopIcons 内部用的是 absolute 定位，需要一个明确的定位祖先，
+ *      不能指望隔着 astro-island 找到 body。
+ *      所以这里显式给一层 absolute inset-0 的盒子。
  */
-/**
- * 五个桌面图标 —— 从【应用注册表】取，不在这里手写。
- *
- * ⚠️ 以前这里是手抄的一份清单，和 WindowManager 的 ICON_ROUTES
- *    是两份独立数据，改一边忘另一边就会出现"双击图标没反应"。
- *    现在唯一的真相在 config/apps.ts。
- */
-const icons = appsOf(DESKTOP_APP_IDS).map((a) => ({
-  id: a.id,
-  icon: a.icon,
-  path: a.path,
-  // 两份文案都从词典里取，不手抄 —— 免得和窗口内的叫法对不上
-  zh: zhCN[a.nameKey as keyof Dict],
-  en: en[a.nameKey as keyof Dict],
-}));
 ---
 
-{/*
-  ── 关于多语言（本次新增）──
-
-  ⚠️⚠️ 这是整个项目里【唯一不能用 t()】的地方。
-
-     桌面图标是 Astro 在【构建期】渲染出的静态 HTML，不在任何 React 岛屿里 ——
-     它没有 hook、读不到 zustand store，用户切语言时它也不会重渲染。
-
-     所以这里换个办法：把中英两份都写进 HTML，再用纯 CSS 按 <html lang>
-     显示其中一份（规则在 styles/global.css 的 .i18n-zh / .i18n-en）：
-
-         html[lang="zh-CN"] .i18n-en { display: none }
-         其它 lang          .i18n-zh { display: none }
-
-     好处是零 JavaScript —— 静态壳依然是静态壳，而切换语言只改 <html lang>
-     一个属性，图标文字就跟着变了。
-
-     ⚠️ 代价：每个图标多一份隐藏文本。5 个图标 × 几个字，可以接受。
-*/}
-
-{/* 桌面图标区：底部留出任务栏高度，避免图标被压在任务栏下面 */}
-<div class="absolute inset-0 p-3 pb-[calc(var(--taskbar-h)+12px)] pointer-events-none">
-  {/*
-    ⚠️ 这个 grid 里【只能】放图标，一个多余的节点都不行。
-    Astro 会把 <script> 渲染成真实的 DOM 节点，而 display:none 的元素
-    在 CSS Grid 里【依然占一个格子】。一旦 script 混进来，
-    它会吃掉一个单元格，把后面所有图标整体挤歪。
-    所以事件脚本统一放在 DesktopLayout.astro 里，不进这个容器。
-
-    grid-rows-5：五个图标正好一列排满，不用换列。
-    如果以后加图标超过 5 个，grid-flow-col 会自动往右开第二列，
-    但那时候记得把行数改回去（比如 grid-rows-6/7），否则第二列会从中间断掉。
-  */}
-  <div
-    class="desktop-grid pointer-events-auto grid auto-cols-max grid-flow-col grid-rows-5 gap-1"
-  >
-    {icons.map((i) => <DesktopIcon {...i} />)}
-  </div>
+<div class="absolute inset-0">
+  <DesktopIcons client:only="react" />
 </div>

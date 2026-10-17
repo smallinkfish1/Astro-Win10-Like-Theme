@@ -9,7 +9,7 @@
 
 -->
 
-# Astro Win10 Blog (WIP)
+# Astro WinDeck Blog (WIP)
 
 > 一个把博客做成 **Windows 10 桌面**的 Astro 项目。
 > 文章是文件，分类是磁贴，归档是「此电脑」，草稿丢进「回收站」。
@@ -23,9 +23,7 @@
 
 ---
 
-## 在线预览
-
-> ⚠️ 部署之后把下面的地址换成你自己的。
+## 在线预览 （WIP）
 
 | 入口 | 地址 |
 |---|---|
@@ -81,8 +79,8 @@ npm run dev      # → http://localhost:4321
 
 ```bash
 # 1. 拿到代码
-git clone https://github.com/smallinkfish1/Astro-Win10-Like-Theme.git
-cd win10-blog
+git clone https://github.com/smallinkfish1/Astro-WinDeck-Theme.git
+cd Astro-Win10-Like-Theme
 
 # 2. 装依赖
 npm install
@@ -348,7 +346,7 @@ npm run verify:apps     # 只查应用注册表
 
 ---
 
-## 更多文档
+<!--## 更多文档
 
 仓库根目录还有几份针对具体操作的文档：
 
@@ -356,7 +354,7 @@ npm run verify:apps     # 只查应用注册表
 - **`改桌面和图标改哪里.md`** —— 换壁纸、换图标、调图标顺序
 - **`从Hexo迁移-迁移前必读.md`** —— 如果你原来用 Hexo
 - **`上传到GitHub-操作指南.md`** —— 部署到线上
-
+!-->
 ---
 
 ## 反馈
